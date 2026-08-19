@@ -1,4 +1,10 @@
 import { DashboardLayout } from '@/layouts/DashboardLayout'
+import { ThroughputChart } from '@/components/charts/ThroughputChart'
+import { useThroughputData } from '@/hooks/useThroughputData'
+import benchmarks from '@/data/benchmarks.json'
+import type { ThroughputBenchmark } from '@/types/benchmark'
+
+const defaultThroughputData = benchmarks as ThroughputBenchmark
 
 function PlaceholderPanel({ label }: { label: string }) {
   return (
@@ -9,6 +15,8 @@ function PlaceholderPanel({ label }: { label: string }) {
 }
 
 function App() {
+  const throughput = useThroughputData(defaultThroughputData)
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -22,7 +30,13 @@ function App() {
         </section>
 
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <PlaceholderPanel label="Horizontal Bar Chart" />
+          <ThroughputChart
+            data={throughput.data}
+            isCustom={throughput.isCustom}
+            error={throughput.error}
+            onUpload={throughput.uploadFile}
+            onReset={throughput.resetToDefault}
+          />
           <PlaceholderPanel label="Multi-Series Line Chart" />
           <PlaceholderPanel label="Stacked Memory Bars" />
           <PlaceholderPanel label="Chart Panel" />
