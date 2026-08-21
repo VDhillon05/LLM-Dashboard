@@ -1,193 +1,207 @@
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
   Legend as RechartsLegend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
+  ResponsiveContainer,
   XAxis,
   YAxis,
+  ZAxis,
 } from 'recharts'
 import type {
-  DecodingSpeedupEntry,
-  MultiTokenPredictionBenchmark,
+  AcceptanceRateDataset,
+  DecodingSpeedupDataset,
+  ModelFamily,
 } from '@/types/benchmark'
 import { FAMILY_COLOR } from '@/utils/chartColors'
+import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
 interface MultiTokenPredictionProps {
-  data: MultiTokenPredictionBenchmark
+  decodingSpeedup: DecodingSpeedupDataset
+  acceptanceRate: AcceptanceRateDataset
+  speedupIsCustom?: boolean
+  speedupError?: string | null
+  onUploadSpeedup?: (file: File) => void
+  onResetSpeedup?: () => void
+  acceptanceIsCustom?: boolean
+  acceptanceError?: string | null
+  onUploadAcceptance?: (file: File) => void
+  onResetAcceptance?: () => void
 }
 
-interface AcceptanceRateRow {
-  draftLength: number
-  [model: string]: number
+interface ScatterPoint {
+  model: string
+  family: ModelFamily
+  speedup: number
+  acceptanceRate: number
 }
 
-function mergeAcceptanceRateByDraftLength(
-  series: MultiTokenPredictionBenchmark['acceptanceRate'],
-): AcceptanceRateRow[] {
-  const rowsByDraftLength = new Map<number, AcceptanceRateRow>()
+function average(values: number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
 
-  for (const { model, points } of series) {
-    for (const point of points) {
-      const row =
-        rowsByDraftLength.get(point.draftLength) ?? { draftLength: point.draftLength }
-      row[model] = point.acceptanceRate
-      rowsByDraftLength.set(point.draftLength, row)
-    }
+// Joins the two independent raw files by model — speedup is a flat summary
+// stat, acceptance rate is a time series we reduce to a mean per model.
+function joinByModel(
+  decodingSpeedup: DecodingSpeedupDataset,
+  acceptanceRate: AcceptanceRateDataset,
+): ScatterPoint[] {
+  const avgAcceptanceByModel = new Map<string, number>()
+  for (const series of acceptanceRate.series) {
+    if (series.points.length === 0) continue
+    avgAcceptanceByModel.set(
+      series.model,
+      average(series.points.map((p) => p.acceptanceRate)),
+    )
   }
 
-  return [...rowsByDraftLength.values()].sort((a, b) => a.draftLength - b.draftLength)
+  return decodingSpeedup.series
+    .filter((entry) => avgAcceptanceByModel.has(entry.model))
+    .map((entry) => ({
+      model: entry.model,
+      family: entry.family,
+      speedup: entry.speedup,
+      acceptanceRate: avgAcceptanceByModel.get(entry.model)!,
+    }))
 }
 
-function SpeedupTooltip({
+function ScatterTooltip({
   active,
   payload,
 }: {
   active?: boolean
-  payload?: { payload: DecodingSpeedupEntry }[]
+  payload?: { payload: ScatterPoint }[]
 }) {
   if (!active || !payload?.length) return null
-  const row = payload[0].payload
+  const point = payload[0].payload
 
   return (
     <div className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 shadow-lg">
       <div className="flex items-center gap-2">
-        <span className="h-[2px] w-3" style={{ backgroundColor: FAMILY_COLOR[row.family] }} />
-        <span className="text-xs text-zinc-400">{row.model}</span>
+        <span
+          className="h-2.5 w-2.5 rounded-full"
+          style={{ backgroundColor: FAMILY_COLOR[point.family] }}
+        />
+        <span className="text-xs text-zinc-400">{point.model}</span>
       </div>
-      <p className="mt-1 text-sm font-semibold text-zinc-100">{row.speedup.toFixed(1)}x</p>
+      <p className="mt-1 text-sm font-semibold text-zinc-100">
+        {point.speedup.toFixed(1)}x speedup
+      </p>
+      <p className="text-xs text-zinc-500">
+        {(point.acceptanceRate * 100).toFixed(0)}% avg acceptance
+      </p>
     </div>
   )
 }
 
-function AcceptanceRateTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: { name: string; value: number; color: string }[]
-  label?: number
-}) {
-  if (!active || !payload?.length) return null
-
-  return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 shadow-lg">
-      <p className="text-xs text-zinc-400">Draft length {label}</p>
-      <div className="mt-1 flex flex-col gap-1">
-        {payload.map((entry) => (
-          <div key={entry.name} className="flex items-center gap-2">
-            <span className="h-[2px] w-3" style={{ backgroundColor: entry.color }} />
-            <span className="text-xs text-zinc-400">{entry.name}</span>
-            <span className="ml-auto text-sm font-semibold text-zinc-100">
-              {(entry.value * 100).toFixed(0)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-export function MultiTokenPrediction({ data }: MultiTokenPredictionProps) {
-  const acceptanceRows = mergeAcceptanceRateByDraftLength(data.acceptanceRate)
+export function MultiTokenPrediction({
+  decodingSpeedup,
+  acceptanceRate,
+  speedupIsCustom,
+  speedupError,
+  onUploadSpeedup,
+  onResetSpeedup,
+  acceptanceIsCustom,
+  acceptanceError,
+  onUploadAcceptance,
+  onResetAcceptance,
+}: MultiTokenPredictionProps) {
+  const points = joinByModel(decodingSpeedup, acceptanceRate)
+  const families = [...new Set(points.map((p) => p.family))]
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-      <div className="mb-1">
-        <h2 className="text-sm font-medium text-zinc-200">Multi-Token Prediction</h2>
-        <p className="text-xs text-zinc-500">{data.device} · speculative decoding</p>
-      </div>
-
-      <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="mb-1 flex items-start justify-between">
         <div>
-          <p className="mb-1 px-1 text-xs text-zinc-500">Decoding speedup</p>
-          <div className="h-[220px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={data.decodingSpeedup}
-                margin={{ top: 4, right: 8, bottom: 4, left: 4 }}
-                barSize={28}
-              >
-                <CartesianGrid vertical={false} stroke="#27272a" strokeWidth={1} />
-                <XAxis
-                  dataKey="model"
-                  stroke="#52525b"
-                  tick={{ fill: '#a1a1aa', fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#27272a' }}
-                />
-                <YAxis
-                  stroke="#52525b"
-                  tick={{ fill: '#71717a', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#27272a' }}
-                  width={32}
-                  tickFormatter={(value: number) => `${value}x`}
-                />
-                <Tooltip cursor={{ fill: '#ffffff', opacity: 0.04 }} content={<SpeedupTooltip />} />
-                <Bar dataKey="speedup" radius={[4, 4, 0, 0]}>
-                  {data.decodingSpeedup.map((entry) => (
-                    <Cell key={entry.model} fill={FAMILY_COLOR[entry.family]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <h2 className="text-sm font-medium text-zinc-200">Multi-Token Prediction</h2>
+          <p className="text-xs text-zinc-500">
+            {decodingSpeedup.device || acceptanceRate.device || 'No data loaded'} · speedup vs.
+            acceptance rate
+          </p>
         </div>
 
-        <div>
-          <p className="mb-1 px-1 text-xs text-zinc-500">Acceptance rate</p>
-          <div className="h-[220px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={acceptanceRows} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
-                <CartesianGrid vertical={false} stroke="#27272a" strokeWidth={1} />
-                <XAxis
-                  dataKey="draftLength"
-                  stroke="#52525b"
-                  tick={{ fill: '#71717a', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#27272a' }}
-                />
-                <YAxis
-                  stroke="#52525b"
-                  tick={{ fill: '#71717a', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#27272a' }}
-                  width={40}
-                  domain={[0, 1]}
-                  tickFormatter={(value: number) => `${Math.round(value * 100)}%`}
-                />
-                <Tooltip
-                  cursor={{ stroke: '#3f3f46', strokeWidth: 1 }}
-                  content={<AcceptanceRateTooltip />}
-                />
+        <div className="flex items-center gap-3">
+          {onUploadSpeedup && onResetSpeedup && (
+            <div title="Decoding speedup file">
+              <DatasetUploadControls
+                isCustom={!!speedupIsCustom}
+                onUpload={onUploadSpeedup}
+                onReset={onResetSpeedup}
+              />
+            </div>
+          )}
+          {onUploadAcceptance && onResetAcceptance && (
+            <div title="Acceptance rate file">
+              <DatasetUploadControls
+                isCustom={!!acceptanceIsCustom}
+                onUpload={onUploadAcceptance}
+                onReset={onResetAcceptance}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(speedupError || acceptanceError) && (
+        <p className="mb-2 text-xs text-red-400">{speedupError ?? acceptanceError}</p>
+      )}
+
+      {points.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center py-16">
+          <p className="text-xs text-zinc-600">
+            No multi-token prediction data yet — upload the speedup and acceptance rate files to
+            populate this chart.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-2 h-[260px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
+              <CartesianGrid stroke="#27272a" strokeWidth={1} />
+              <XAxis
+                dataKey="acceptanceRate"
+                type="number"
+                domain={[0, 1]}
+                name="Acceptance rate"
+                stroke="#52525b"
+                tick={{ fill: '#71717a', fontSize: 11 }}
+                tickLine={false}
+                axisLine={{ stroke: '#27272a' }}
+                tickFormatter={(value: number) => `${Math.round(value * 100)}%`}
+              />
+              <YAxis
+                dataKey="speedup"
+                type="number"
+                name="Decoding speedup"
+                stroke="#52525b"
+                tick={{ fill: '#71717a', fontSize: 11 }}
+                tickLine={false}
+                axisLine={{ stroke: '#27272a' }}
+                width={36}
+                tickFormatter={(value: number) => `${value}x`}
+              />
+              <ZAxis range={[80, 80]} />
+              <Tooltip cursor={{ stroke: '#3f3f46', strokeWidth: 1 }} content={<ScatterTooltip />} />
+              {families.length > 1 && (
                 <RechartsLegend
                   verticalAlign="top"
-                  height={24}
-                  wrapperStyle={{ fontSize: 11, color: '#a1a1aa' }}
+                  height={28}
+                  wrapperStyle={{ fontSize: 12, color: '#a1a1aa' }}
                 />
-                {data.acceptanceRate.map(({ model, family }) => (
-                  <Line
-                    key={model}
-                    dataKey={model}
-                    name={model}
-                    type="monotone"
-                    stroke={FAMILY_COLOR[family]}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+              )}
+              {families.map((family) => (
+                <Scatter
+                  key={family}
+                  name={family}
+                  data={points.filter((p) => p.family === family)}
+                  fill={FAMILY_COLOR[family]}
+                />
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
         </div>
-      </div>
+      )}
     </div>
   )
 }

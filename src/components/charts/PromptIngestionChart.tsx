@@ -8,32 +8,37 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { PromptIngestionBenchmark, PromptIngestionSeries } from '@/types/benchmark'
+import type { TokensPerSecondDataset, TokensPerSecondSeries } from '@/types/benchmark'
 import { FAMILY_COLOR } from '@/utils/chartColors'
+import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
 const BATCH_SIZE_TICKS = [1, 2, 4, 8, 16, 32, 64, 128]
 
 interface PromptIngestionChartProps {
-  data: PromptIngestionBenchmark
+  data: TokensPerSecondDataset
+  isCustom?: boolean
+  error?: string | null
+  onUpload?: (file: File) => void
+  onReset?: () => void
 }
 
 interface ChartRow {
-  batchSize: number
+  tokens: number
   [model: string]: number
 }
 
-function mergeSeriesByBatchSize(series: PromptIngestionSeries[]): ChartRow[] {
-  const rowsByBatchSize = new Map<number, ChartRow>()
+function mergeSeriesByTokens(series: readonly TokensPerSecondSeries[]): ChartRow[] {
+  const rowsByTokens = new Map<number, ChartRow>()
 
   for (const { model, points } of series) {
     for (const point of points) {
-      const row = rowsByBatchSize.get(point.batchSize) ?? { batchSize: point.batchSize }
+      const row = rowsByTokens.get(point.tokens) ?? { tokens: point.tokens }
       row[model] = point.tokensPerSecond
-      rowsByBatchSize.set(point.batchSize, row)
+      rowsByTokens.set(point.tokens, row)
     }
   }
 
-  return [...rowsByBatchSize.values()].sort((a, b) => a.batchSize - b.batchSize)
+  return [...rowsByTokens.values()].sort((a, b) => a.tokens - b.tokens)
 }
 
 function PromptIngestionTooltip({
@@ -65,62 +70,87 @@ function PromptIngestionTooltip({
   )
 }
 
-export function PromptIngestionChart({ data }: PromptIngestionChartProps) {
-  const rows = mergeSeriesByBatchSize(data.series)
+export function PromptIngestionChart({
+  data,
+  isCustom,
+  error,
+  onUpload,
+  onReset,
+}: PromptIngestionChartProps) {
+  const rows = mergeSeriesByTokens(data.series)
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-      <div className="mb-1">
-        <h2 className="text-sm font-medium text-zinc-200">Prompt Ingestion</h2>
-        <p className="text-xs text-zinc-500">{data.device} · tokens/sec by batch size</p>
+      <div className="mb-1 flex items-start justify-between">
+        <div>
+          <h2 className="text-sm font-medium text-zinc-200">Prompt Ingestion</h2>
+          <p className="text-xs text-zinc-500">
+            {data.device || 'No data loaded'} · tokens/sec by batch size
+            {isCustom && <span className="ml-1.5 text-zinc-600">(custom upload)</span>}
+          </p>
+        </div>
+
+        {onUpload && onReset && (
+          <DatasetUploadControls isCustom={!!isCustom} onUpload={onUpload} onReset={onReset} />
+        )}
       </div>
 
-      <div className="mt-2 h-[260px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
-            <CartesianGrid vertical={false} stroke="#27272a" strokeWidth={1} />
-            <XAxis
-              dataKey="batchSize"
-              type="number"
-              scale="log"
-              domain={[1, 128]}
-              ticks={BATCH_SIZE_TICKS}
-              stroke="#52525b"
-              tick={{ fill: '#71717a', fontSize: 11 }}
-              tickLine={false}
-              axisLine={{ stroke: '#27272a' }}
-            />
-            <YAxis
-              stroke="#52525b"
-              tick={{ fill: '#71717a', fontSize: 11 }}
-              tickLine={false}
-              axisLine={{ stroke: '#27272a' }}
-              width={48}
-            />
-            <Tooltip
-              cursor={{ stroke: '#3f3f46', strokeWidth: 1 }}
-              content={<PromptIngestionTooltip />}
-            />
-            <RechartsLegend
-              verticalAlign="top"
-              height={28}
-              wrapperStyle={{ fontSize: 12, color: '#a1a1aa' }}
-            />
-            {data.series.map(({ model, family }) => (
-              <Line
-                key={model}
-                dataKey={model}
-                name={model}
-                type="monotone"
-                stroke={FAMILY_COLOR[family]}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
+      {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
+
+      {rows.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center py-16">
+          <p className="text-xs text-zinc-600">
+            No prompt ingestion data yet — upload a results file to populate this chart.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-2 h-[260px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={rows} margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
+              <CartesianGrid vertical={false} stroke="#27272a" strokeWidth={1} />
+              <XAxis
+                dataKey="tokens"
+                type="number"
+                scale="log"
+                domain={[1, 128]}
+                ticks={BATCH_SIZE_TICKS}
+                stroke="#52525b"
+                tick={{ fill: '#71717a', fontSize: 11 }}
+                tickLine={false}
+                axisLine={{ stroke: '#27272a' }}
               />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+              <YAxis
+                stroke="#52525b"
+                tick={{ fill: '#71717a', fontSize: 11 }}
+                tickLine={false}
+                axisLine={{ stroke: '#27272a' }}
+                width={48}
+              />
+              <Tooltip
+                cursor={{ stroke: '#3f3f46', strokeWidth: 1 }}
+                content={<PromptIngestionTooltip />}
+              />
+              <RechartsLegend
+                verticalAlign="top"
+                height={28}
+                wrapperStyle={{ fontSize: 12, color: '#a1a1aa' }}
+              />
+              {data.series.map(({ model, family }) => (
+                <Line
+                  key={model}
+                  dataKey={model}
+                  name={model}
+                  type="monotone"
+                  stroke={FAMILY_COLOR[family]}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }
