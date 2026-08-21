@@ -1,18 +1,21 @@
 import { DashboardLayout } from '@/layouts/DashboardLayout'
 import { ThroughputChart } from '@/components/charts/ThroughputChart'
+import { PromptIngestionChart } from '@/components/charts/PromptIngestionChart'
+import { MemoryBehaviorChart } from '@/components/charts/MemoryBehaviorChart'
+import { MultiTokenPrediction } from '@/components/charts/MultiTokenPrediction'
 import { useThroughputData } from '@/hooks/useThroughputData'
 import benchmarks from '@/data/benchmarks.json'
-import type { ThroughputBenchmark } from '@/types/benchmark'
+import type {
+  MemoryBehaviorBenchmark,
+  MultiTokenPredictionBenchmark,
+  PromptIngestionBenchmark,
+  ThroughputBenchmark,
+} from '@/types/benchmark'
 
-const defaultThroughputData = benchmarks as ThroughputBenchmark
-
-function PlaceholderPanel({ label }: { label: string }) {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-900/50">
-      <span className="text-sm text-zinc-600">{label}</span>
-    </div>
-  )
-}
+const defaultThroughputData = benchmarks.throughput as ThroughputBenchmark
+const promptIngestionData = benchmarks.promptIngestion as PromptIngestionBenchmark
+const memoryBehaviorData = benchmarks.memoryBehavior as MemoryBehaviorBenchmark
+const multiTokenPredictionData = benchmarks.multiTokenPrediction as MultiTokenPredictionBenchmark
 
 function App() {
   const throughput = useThroughputData(defaultThroughputData)
@@ -37,9 +40,9 @@ function App() {
             onUpload={throughput.uploadFile}
             onReset={throughput.resetToDefault}
           />
-          <PlaceholderPanel label="Multi-Series Line Chart" />
-          <PlaceholderPanel label="Stacked Memory Bars" />
-          <PlaceholderPanel label="Chart Panel" />
+          <PromptIngestionChart data={promptIngestionData} />
+          <MemoryBehaviorChart data={memoryBehaviorData} />
+          <MultiTokenPrediction data={multiTokenPredictionData} />
         </section>
 
         <section>

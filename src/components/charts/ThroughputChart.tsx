@@ -11,12 +11,7 @@ import {
 } from 'recharts'
 import { RotateCcw, Upload } from 'lucide-react'
 import type { ThroughputBenchmark, ThroughputEntry, ModelFamily } from '@/types/benchmark'
-
-const FAMILY_COLOR: Record<ModelFamily, string> = {
-  Llama: '#0891b2', // cyan
-  Phi: '#a855f7', // purple
-  Qwen: '#d97706', // amber
-}
+import { FAMILY_COLOR } from '@/utils/chartColors'
 
 interface ThroughputChartProps {
   data: ThroughputBenchmark
