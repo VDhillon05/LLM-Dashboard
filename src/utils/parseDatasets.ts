@@ -1,6 +1,7 @@
 import Papa from 'papaparse'
 import type {
   AcceptanceRateTimeSeries,
+  BenchmarkMatrixRow,
   DecodingSpeedupEntry,
   Device,
   MemoryTimeSeries,
@@ -42,6 +43,15 @@ function requireFamily(row: Record<string, string>): ModelFamily {
     throw new Error(`Column "family" must be one of Llama/Phi/Qwen (got "${row.family}").`)
   }
   return row.family
+}
+
+function requireQuantization(row: Record<string, string>): Quantization {
+  if (!QUANTIZATIONS.has(row.quantization)) {
+    throw new Error(
+      `Column "quantization" must be one of FP16/Q8_0/Q4_K_M (got "${row.quantization}").`,
+    )
+  }
+  return row.quantization as Quantization
 }
 
 async function readFile(file: File): Promise<{ text: string; isCsv: boolean }> {
@@ -206,4 +216,40 @@ export async function parseDecodingSpeedupFile(
     throw new Error('JSON file needs a non-empty "entries" array.')
   }
   return new RawDataset(raw.device ?? fallbackDevice, raw.entries)
+}
+
+// --- Benchmark matrix (flat table, one row per model/quantization/batch) ---
+
+function toBenchmarkMatrixRows(rows: Record<string, string>[]): BenchmarkMatrixRow[] {
+  return rows.map((row) => {
+    const family = requireFamily(row)
+    if (!row.model) throw new Error('Column "model" is required.')
+    return {
+      model: row.model,
+      family,
+      quantization: requireQuantization(row),
+      batch: requireNumber(row, 'batch'),
+      prefillTokensPerSecond: requireNumber(row, 'prefillTokensPerSecond'),
+      generationTokensPerSecond: requireNumber(row, 'generationTokensPerSecond'),
+      peakMemoryGB: requireNumber(row, 'peakMemoryGB'),
+    }
+  })
+}
+
+export async function parseBenchmarkMatrixFile(
+  file: File,
+  fallbackDevice: Device,
+): Promise<RawDataset<BenchmarkMatrixRow>> {
+  const { text, isCsv } = await readFile(file)
+
+  if (isCsv) {
+    const rows = toBenchmarkMatrixRows(parseCsvRows(text))
+    return new RawDataset(fallbackDevice, rows)
+  }
+
+  const raw = JSON.parse(text) as { device?: Device; rows?: BenchmarkMatrixRow[] }
+  if (!Array.isArray(raw.rows) || raw.rows.length === 0) {
+    throw new Error('JSON file needs a non-empty "rows" array.')
+  }
+  return new RawDataset(raw.device ?? fallbackDevice, raw.rows)
 }

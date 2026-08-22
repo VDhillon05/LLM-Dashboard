@@ -3,5 +3,6 @@
   "tokensPerSecond": [],
   "memory": [],
   "acceptanceRate": [],
-  "decodingSpeedup": []
+  "decodingSpeedup": [],
+  "benchmarkMatrix": []
 }

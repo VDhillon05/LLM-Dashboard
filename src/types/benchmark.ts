@@ -60,6 +60,21 @@ export interface DecodingSpeedupEntry {
   speedup: number
 }
 
+// --- Benchmark matrix — one row per (model, quantization, batch) config,
+// the dense table at the bottom of the dashboard. Its own raw file, not
+// derived from the series above (those are per-metric sweeps/timelines;
+// this is the flat summary table a reader scans row by row). ---
+
+export interface BenchmarkMatrixRow {
+  model: string
+  family: ModelFamily
+  quantization: Quantization
+  batch: number
+  prefillTokensPerSecond: number
+  generationTokensPerSecond: number
+  peakMemoryGB: number
+}
+
 /**
  * Wraps a parsed raw series so nothing downstream can overwrite the source
  * of truth in place. The array lives behind a private field and is frozen
@@ -83,3 +98,4 @@ export type TokensPerSecondDataset = RawDataset<TokensPerSecondSeries>
 export type MemoryDataset = RawDataset<MemoryTimeSeries>
 export type AcceptanceRateDataset = RawDataset<AcceptanceRateTimeSeries>
 export type DecodingSpeedupDataset = RawDataset<DecodingSpeedupEntry>
+export type BenchmarkMatrixDataset = RawDataset<BenchmarkMatrixRow>
