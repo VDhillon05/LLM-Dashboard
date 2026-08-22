@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import {
   Bar,
   BarChart,
@@ -9,17 +8,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { RotateCcw, Upload } from 'lucide-react'
-import type { ThroughputBenchmark, ThroughputEntry, ModelFamily } from '@/types/benchmark'
-
-const FAMILY_COLOR: Record<ModelFamily, string> = {
-  Llama: '#0891b2', // cyan
-  Phi: '#a855f7', // purple
-  Qwen: '#d97706', // amber
-}
+import type { ModelFamily, TokensPerSecondDataset, TokensPerSecondSeries } from '@/types/benchmark'
+import { FAMILY_COLOR } from '@/utils/chartColors'
+import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
 interface ThroughputChartProps {
-  data: ThroughputBenchmark
+  data: TokensPerSecondDataset
   isCustom?: boolean
   error?: string | null
   onUpload?: (file: File) => void
@@ -29,19 +23,22 @@ interface ThroughputChartProps {
 interface ChartRow {
   label: string
   model: string
-  quantization: string
+  quantization?: string
   family: ModelFamily
   tokensPerSecond: number
 }
 
-function toChartRows(entries: ThroughputEntry[]): ChartRow[] {
-  return entries
+// Throughput is a single reading per (model, quantization) config, so each
+// series collapses to its first point.
+function toChartRows(series: readonly TokensPerSecondSeries[]): ChartRow[] {
+  return series
+    .filter((entry) => entry.points.length > 0)
     .map((entry) => ({
-      label: `${entry.model} · ${entry.quantization}`,
+      label: entry.quantization ? `${entry.model} · ${entry.quantization}` : entry.model,
       model: entry.model,
       quantization: entry.quantization,
       family: entry.family,
-      tokensPerSecond: entry.tokensPerSecond,
+      tokensPerSecond: entry.points[0].tokensPerSecond,
     }))
     .sort((a, b) => b.tokensPerSecond - a.tokensPerSecond)
 }
@@ -63,9 +60,7 @@ function ThroughputTooltip({
           className="h-[2px] w-3"
           style={{ backgroundColor: FAMILY_COLOR[row.family] }}
         />
-        <span className="text-xs text-zinc-400">
-          {row.model} ({row.quantization})
-        </span>
+        <span className="text-xs text-zinc-400">{row.label}</span>
       </div>
       <p className="mt-1 text-sm font-semibold text-zinc-100">
         {row.tokensPerSecond.toFixed(1)} tok/s
@@ -98,14 +93,7 @@ export function ThroughputChart({
   onUpload,
   onReset,
 }: ThroughputChartProps) {
-  const rows = toChartRows(data.entries)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (file) onUpload?.(file)
-    event.target.value = ''
-  }
+  const rows = toChartRows(data.series)
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
@@ -115,39 +103,13 @@ export function ThroughputChart({
             Raw Generation Throughput
           </h2>
           <p className="text-xs text-zinc-500">
-            {data.hardware ? `${data.hardware} · tokens/sec` : 'No data loaded'}
+            {data.device || 'No data loaded'} · tokens/sec
             {isCustom && <span className="ml-1.5 text-zinc-600">(custom upload)</span>}
           </p>
         </div>
 
-        {onUpload && (
-          <div className="flex items-center gap-1">
-            {isCustom && onReset && (
-              <button
-                type="button"
-                onClick={onReset}
-                title="Reset to cached results"
-                className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="Upload a benchmark JSON file"
-              className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <Upload className="h-3.5 w-3.5" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </div>
+        {onUpload && onReset && (
+          <DatasetUploadControls isCustom={!!isCustom} onUpload={onUpload} onReset={onReset} />
         )}
       </div>
 
@@ -156,7 +118,7 @@ export function ThroughputChart({
       {rows.length === 0 ? (
         <div className="flex flex-1 items-center justify-center py-16">
           <p className="text-xs text-zinc-600">
-            No throughput data yet — upload a benchmark JSON to populate this chart.
+            No throughput data yet — upload a results file to populate this chart.
           </p>
         </div>
       ) : (

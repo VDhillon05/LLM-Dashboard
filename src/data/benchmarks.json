@@ -1,5 +1,7 @@
 {
-  "hardware": "",
-  "unit": "tokens/sec",
-  "entries": []
+  "device": "",
+  "tokensPerSecond": [],
+  "memory": [],
+  "acceptanceRate": [],
+  "decodingSpeedup": []
 }
