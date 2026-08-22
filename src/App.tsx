@@ -3,11 +3,13 @@ import { ThroughputChart } from '@/components/charts/ThroughputChart'
 import { PromptIngestionChart } from '@/components/charts/PromptIngestionChart'
 import { MemoryBehaviorChart } from '@/components/charts/MemoryBehaviorChart'
 import { MultiTokenPrediction } from '@/components/charts/MultiTokenPrediction'
+import { BenchmarkTable } from '@/components/table/BenchmarkTable'
 import { useUploadableDataset } from '@/hooks/useUploadableDataset'
 import benchmarks from '@/data/benchmarks.json'
 import {
   RawDataset,
   type AcceptanceRateTimeSeries,
+  type BenchmarkMatrixRow,
   type DecodingSpeedupEntry,
   type Device,
   type MemoryTimeSeries,
@@ -15,6 +17,7 @@ import {
 } from '@/types/benchmark'
 import {
   parseAcceptanceRateFile,
+  parseBenchmarkMatrixFile,
   parseDecodingSpeedupFile,
   parseMemoryFile,
   parseTokensPerSecondFile,
@@ -42,6 +45,10 @@ const defaultDecodingSpeedup = new RawDataset<DecodingSpeedupEntry>(
   device,
   benchmarks.decodingSpeedup as DecodingSpeedupEntry[],
 )
+const defaultBenchmarkMatrix = new RawDataset<BenchmarkMatrixRow>(
+  device,
+  benchmarks.benchmarkMatrix as BenchmarkMatrixRow[],
+)
 
 function App() {
   const throughput = useUploadableDataset(defaultThroughput, (file) =>
@@ -56,6 +63,9 @@ function App() {
   )
   const acceptanceRate = useUploadableDataset(defaultAcceptanceRate, (file) =>
     parseAcceptanceRateFile(file, device),
+  )
+  const benchmarkMatrix = useUploadableDataset(defaultBenchmarkMatrix, (file) =>
+    parseBenchmarkMatrixFile(file, device),
   )
 
   return (
@@ -107,9 +117,13 @@ function App() {
         </section>
 
         <section>
-          <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-900/50">
-            <span className="text-sm text-zinc-600">Data Matrix Table</span>
-          </div>
+          <BenchmarkTable
+            data={benchmarkMatrix.dataset}
+            isCustom={benchmarkMatrix.isCustom}
+            error={benchmarkMatrix.error}
+            onUpload={benchmarkMatrix.uploadFile}
+            onReset={benchmarkMatrix.resetToDefault}
+          />
         </section>
       </div>
     </DashboardLayout>
