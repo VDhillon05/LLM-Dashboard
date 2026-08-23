@@ -1,19 +1,17 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-set "BENCH=build-my-msvc-release\bin\llama-bench.exe"
+set "BENCH=path to your llama-bench.exe"
 
 set "RESULTS_DIR=generate-bench-results"
 set "RUN_INDEX=%RESULTS_DIR%\runs.csv"
-set "MODELS=LLMs\Llama-3.2-3B-Instruct-Q8_0.gguf,LLMs\Phi-3.5-mini-instruct-Q8_0.gguf,LLMs\Qwen3-4B-Q8_0.gguf"
+set "MODELS=path to your LLMs"
 set "REPETITIONS=10"
 set "LOG_INTERVAL_MS=100"
 set "PROMPT_TOKENS=512"
 set "GENERATED_VALUES=512 768 1024 1280 1536 1792 2048 2304 2560 2816 3072 3328 3584 3840 4096"
-set "BATCH_VALUES=4096"
+set "BATCH_VALUES=2048 4096"
 set "UBATCH_VALUES=2048 2560 3072 3584 4096"
-::set "BATCH_VALUES=2048 2560 3072 3584 4096"
-::set "UBATCH_VALUES=2048"
 
 if not exist "%RESULTS_DIR%" mkdir "%RESULTS_DIR%"
 if exist "%RUN_INDEX%" del /q "%RUN_INDEX%" >nul 2>nul
@@ -41,7 +39,7 @@ echo.
 
 echo model,prompt_tokens,batch_size,ubatch_size,n_gen,repetitions,bench_json,gpu_csv > "%RUN_INDEX%"
 
-for %%M in (%MODELS:,= %) do (
+for %%M in ("%MODELS:,=" "%") do (
   for %%N in (%GENERATED_VALUES%) do (
     for %%B in (%BATCH_VALUES%) do (
       for %%U in (%UBATCH_VALUES%) do (

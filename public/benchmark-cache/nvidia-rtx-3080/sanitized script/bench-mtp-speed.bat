@@ -2,10 +2,10 @@
 setlocal EnableDelayedExpansion
 
 if not defined CONDA_ENV set "CONDA_ENV=llama.cpp.bench"
-if not defined SERVER_EXE set "SERVER_EXE=build-my-msvc-release\bin\llama-server.exe"
+if not defined SERVER_EXE set "SERVER_EXE=path to your llama-server.exe"
 if not defined SPEED_BENCH set "SPEED_BENCH=tools\server\bench\speed-bench\speed_bench.py"
 if not defined RESULTS_DIR set "RESULTS_DIR=mtp-speed-bench-results"
-set "MODEL=LLMs\DeepSeek-V4-Pro-Qwen3.5-4B-MTP-Q6_K.gguf"
+set "MODEL=path to your MTP LLM"
 if not defined PORT set "PORT=8080"
 if not defined MTP_N_MAX_VALUES set "MTP_N_MAX_VALUES=1 2 3 4 5"
 if not defined BENCH_VALUES set "BENCH_VALUES=qualitative throughput_1k throughput_2k"
@@ -26,7 +26,7 @@ if defined LIMIT (
 if "%MODEL%"=="" (
   echo Set MODEL near the top of %~nx0 before running.
   echo Example:
-  echo   set "MODEL=C:\path\to\model.gguf"
+  echo   set "MODEL=path to your LLM\model.gguf"
   echo.
   echo Optional environment overrides:
   echo   SERVER_EXE=%SERVER_EXE%

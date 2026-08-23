@@ -1,11 +1,11 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-set "BENCH=build-my-msvc-release\bin\llama-bench.exe"
+set "BENCH=path to your llama-bench.exe"
 
 set "RESULTS_DIR=prefill-bench-results"
 set "RUN_INDEX=%RESULTS_DIR%\runs.csv"
-set "MODELS=LLMs\Llama-3.2-3B-Instruct-Q8_0.gguf,LLMs\Phi-3.5-mini-instruct-Q8_0.gguf,LLMs\Qwen3-4B-Q8_0.gguf"
+set "MODELS=path to your LLMs"
 
 set "REPETITIONS=100"
 set "LOG_INTERVAL_MS=100"
@@ -40,7 +40,7 @@ echo.
 
 echo model,prompt_tokens,batch_size,ubatch_size,n_gen,repetitions,bench_json,gpu_csv > "%RUN_INDEX%"
 
-for %%M in (%MODELS:,= %) do (
+for %%M in ("%MODELS:,=" "%") do (
   for %%P in (%PROMPT_VALUES%) do (
     for %%B in (%BATCH_VALUES%) do (
       for %%U in (%UBATCH_VALUES%) do (

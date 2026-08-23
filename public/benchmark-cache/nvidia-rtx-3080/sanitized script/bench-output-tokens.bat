@@ -1,16 +1,10 @@
 @echo off
 setlocal
 
-set "BENCH=build-my-msvc-release\bin\llama-bench.exe"
+set "BENCH=path to your llama-bench.exe"
 
-set "LLAMA_RESULTS=llama-3.2-3B-bench-results.json"
-set "LLAMA_MODELS=LLMs\Llama-3.2-3B-Instruct-Q5_K_M.gguf,LLMs\Llama-3.2-3B-Instruct-Q6_K.gguf,LLMs\Llama-3.2-3B-Instruct-Q8_0.gguf"
-
-set "PHI_RESULTS=phi-3.5-mini-bench-results.json"
-set "PHI_MODELS=LLMs\Phi-3.5-mini-instruct-Q5_K_M.gguf,LLMs\Phi-3.5-mini-instruct-Q6_K.gguf,LLMs\Phi-3.5-mini-instruct-Q8_0.gguf"
-
-set "QWEN_RESULTS=qwen3-4B-bench-results.json"
-set "QWEN_MODELS=LLMs\Qwen3-4B-Q5_K_M.gguf,LLMs\Qwen3-4B-Q6_K.gguf,LLMs\Qwen3-4B-Q8_0.gguf"
+set "RESULTS=output-token-bench-results.json"
+set "MODELS=path to your LLMs"
 
 set "PROMPT_TOKENS=512"
 set "OUTPUT_TOKENS=3277,6554,9830,13107"
@@ -25,11 +19,7 @@ echo Fixed prompt tokens: %PROMPT_TOKENS%
 echo Output token sweep: %OUTPUT_TOKENS%
 echo.
 
-call :RUN_BENCH "%LLAMA_MODELS%" "%LLAMA_RESULTS%"
-if errorlevel 1 exit /b %ERRORLEVEL%
-call :RUN_BENCH "%PHI_MODELS%" "%PHI_RESULTS%"
-if errorlevel 1 exit /b %ERRORLEVEL%
-call :RUN_BENCH "%QWEN_MODELS%" "%QWEN_RESULTS%"
+call :RUN_BENCH "%MODELS%" "%RESULTS%"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 echo All benchmarks complete.
