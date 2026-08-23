@@ -75,6 +75,120 @@ export interface BenchmarkMatrixRow {
   peakMemoryGB: number
 }
 
+function readNumber(record: Record<string, unknown>, key: string): number {
+  const value = record[key]
+  if (typeof value !== 'number') {
+    throw new Error(`Expected "${key}" to be numeric.`)
+  }
+  return value
+}
+
+function readString(record: Record<string, unknown>, key: string): string {
+  const value = record[key]
+  if (typeof value !== 'string') {
+    throw new Error(`Expected "${key}" to be a string.`)
+  }
+  return value
+}
+
+function readNumberArray(record: Record<string, unknown>, key: string): number[] {
+  const value = record[key]
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'number')) {
+    throw new Error(`Expected "${key}" to be an array of numbers.`)
+  }
+  return value
+}
+
+// --- Extracted raw benchmark data ---
+
+export class BenchmarkModel {
+  readonly modelType: string
+  readonly modelSize: number
+  readonly modelNParams: number
+
+  constructor(modelType: string, modelSize: number, modelNParams: number) {
+    this.modelType = modelType
+    this.modelSize = modelSize
+    this.modelNParams = modelNParams
+  }
+
+  static fromRaw(record: Record<string, unknown>): BenchmarkModel {
+    return new BenchmarkModel(
+      readString(record, 'model_type'),
+      readNumber(record, 'model_size'),
+      readNumber(record, 'model_n_params'),
+    )
+  }
+}
+
+export class BenchmarkResult {
+  readonly model: BenchmarkModel
+  readonly gpuInfo: string
+  readonly nPrompt: number
+  readonly nGen: number
+  readonly nDepth: number
+  readonly nBatch: number
+  readonly nUbatch: number
+  readonly testTime: string
+  readonly avgNs: number
+  readonly stddevNs: number
+  readonly avgTs: number
+  readonly stddevTs: number
+  readonly samplesNs: readonly number[]
+  readonly samplesTs: readonly number[]
+
+  constructor(
+    model: BenchmarkModel,
+    gpuInfo: string,
+    nPrompt: number,
+    nGen: number,
+    nDepth: number,
+    nBatch: number,
+    nUbatch: number,
+    testTime: string,
+    avgNs: number,
+    stddevNs: number,
+    avgTs: number,
+    stddevTs: number,
+    samplesNs: number[],
+    samplesTs: number[],
+  ) {
+    this.model = model
+    this.gpuInfo = gpuInfo
+    this.nPrompt = nPrompt
+    this.nGen = nGen
+    this.nDepth = nDepth
+    this.nBatch = nBatch
+    this.nUbatch = nUbatch
+    this.testTime = testTime
+    this.avgNs = avgNs
+    this.stddevNs = stddevNs
+    this.avgTs = avgTs
+    this.stddevTs = stddevTs
+    this.samplesNs = Object.freeze([...samplesNs])
+    this.samplesTs = Object.freeze([...samplesTs])
+  }
+
+  static fromRaw(record: Record<string, unknown>): BenchmarkResult {
+    return new BenchmarkResult(
+      BenchmarkModel.fromRaw(record),
+      readString(record, 'gpu_info'),
+      readNumber(record, 'n_prompt'),
+      readNumber(record, 'n_gen'),
+      readNumber(record, 'n_depth'),
+      readNumber(record, 'n_batch'),
+      readNumber(record, 'n_ubatch'),
+      readString(record, 'test_time'),
+      readNumber(record, 'avg_ns'),
+      readNumber(record, 'stddev_ns'),
+      readNumber(record, 'avg_ts'),
+      readNumber(record, 'stddev_ts'),
+      readNumberArray(record, 'samples_ns'),
+      readNumberArray(record, 'samples_ts'),
+    )
+  }
+}
+
 /**
  * Wraps a parsed raw series so nothing downstream can overwrite the source
  * of truth in place. The array lives behind a private field and is frozen
