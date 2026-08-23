@@ -94,6 +94,15 @@ export class RawDataset<T> {
   }
 }
 
+/**
+ * Returns `dataset` unchanged if it belongs to `device`, otherwise an empty
+ * dataset for that device — so switching the nav's device filter reliably
+ * clears panels that only have data for the previously selected device.
+ */
+export function filterDatasetByDevice<T>(dataset: RawDataset<T>, device: Device): RawDataset<T> {
+  return dataset.device === device ? dataset : new RawDataset<T>(device, [])
+}
+
 export type TokensPerSecondDataset = RawDataset<TokensPerSecondSeries>
 export type MemoryDataset = RawDataset<MemoryTimeSeries>
 export type AcceptanceRateDataset = RawDataset<AcceptanceRateTimeSeries>
