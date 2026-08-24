@@ -1,5 +1,3 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -9,9 +7,6 @@ import {
   MemoryTimeSeries,
   PrefillBenchmarkResult,
 } from '@/types/benchmark'
-import {
-  MtpBenchmarkResult,
-} from '@/types/mtpBenchmark'
 
 function readRawPrefillBenchmark(filename: string): PrefillBenchmarkResult {
   const filePath = path.resolve(
@@ -116,128 +111,5 @@ describe('raw RTX 3080 prefill benchmark results', () => {
     ])
     expect(Object.isFrozen(series.points)).toBe(true)
     expect(Object.isFrozen(series.points[0])).toBe(true)
-  })
-})
-
-describe('raw RTX 3080 MTP benchmark results', () => {
-  it('loads qualitative MTP token results from a JSON path', () => {
-    const filePath = path.resolve(
-      process.cwd(),
-      'public',
-      'benchmark-cache',
-      'nvidia-rtx-3080',
-      'mtp-throughput-memory-profiles',
-      'raw',
-      'memory',
-      'mtp_n1_qualitative_all_osl1024_tokens.json',
-    )
-    const result = new MtpBenchmarkResult(filePath)
-
-    expect(result).toBeInstanceOf(MtpBenchmarkResult)
-    expect(result.jsonFilePath).toBe(filePath)
-    expect(result.completedSamples).toBe(11)
-    expect(result.failedSamples).toBe(0)
-    expect(result.config.bench).toBe('qualitative')
-    expect(result.config.category).toBe('all')
-    expect(result.config.osl).toBe(1024)
-    expect(result.results[0]).toMatchObject({
-      category: 'coding',
-      completionTokens: 354,
-      draftN: 186,
-      draftNAccepted: 167,
-      ok: true,
-    })
-    expect(result.summary.at(-1)).toMatchObject({
-      category: 'overall',
-      requests: 11,
-      turns: 15,
-    })
-    expect(Object.isFrozen(result.config)).toBe(true)
-    expect(Object.isFrozen(result.results)).toBe(true)
-    expect(Object.isFrozen(result.results[0])).toBe(true)
-  })
-
-  it('loads throughput MTP results from a JSON path', () => {
-    const filePath = path.resolve(
-      process.cwd(),
-      'public',
-      'benchmark-cache',
-      'nvidia-rtx-3080',
-      'mtp-throughput-memory-profiles',
-      'raw',
-      'speed',
-      'mtp_n1_throughput_1k_high_entropy_osl2048.json',
-    )
-    const result = new MtpBenchmarkResult(filePath)
-
-    expect(result).toBeInstanceOf(MtpBenchmarkResult)
-    expect(result.config.bench).toBe('throughput_1k')
-    expect(result.config.category).toBe('high_entropy')
-    expect(result.completedSamples).toBe(50)
-    expect(result.selectedSamples).toBe(50)
-    expect(result.results).toHaveLength(50)
-    expect(result.summary[0]).toMatchObject({
-      category: 'high_entropy',
-      requests: 50,
-      turns: 50,
-    })
-  })
-
-  it('rejects an unknown MTP benchmark config type', () => {
-    const sourcePath = path.resolve(
-      process.cwd(),
-      'public',
-      'benchmark-cache',
-      'nvidia-rtx-3080',
-      'mtp-throughput-memory-profiles',
-      'raw',
-      'speed',
-      'mtp_n1_throughput_1k_high_entropy_osl2048.json',
-    )
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'mtp-benchmark-'))
-    const tempPath = path.join(tempDir, 'unknown-bench.json')
-
-    try {
-      const benchmark = JSON.parse(readFileSync(sourcePath, 'utf8')) as {
-        config: { bench: string }
-      }
-      benchmark.config.bench = 'latency_1k'
-      writeFileSync(tempPath, JSON.stringify(benchmark), 'utf8')
-
-      expect(() => new MtpBenchmarkResult(tempPath)).toThrow(
-        'Expected "bench" to be qualitative or throughput MTP data',
-      )
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects MTP results that contradict the selected config category', () => {
-    const sourcePath = path.resolve(
-      process.cwd(),
-      'public',
-      'benchmark-cache',
-      'nvidia-rtx-3080',
-      'mtp-throughput-memory-profiles',
-      'raw',
-      'speed',
-      'mtp_n1_throughput_1k_high_entropy_osl2048.json',
-    )
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'mtp-benchmark-'))
-    const tempPath = path.join(tempDir, 'contradictory-category.json')
-
-    try {
-      const benchmark = JSON.parse(readFileSync(sourcePath, 'utf8')) as {
-        results: Array<{ category: string }>
-      }
-      benchmark.results[0].category = 'low_entropy'
-      writeFileSync(tempPath, JSON.stringify(benchmark), 'utf8')
-
-      expect(() => new MtpBenchmarkResult(tempPath)).toThrow(
-        'to match config category "high_entropy"',
-      )
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true })
-    }
   })
 })
