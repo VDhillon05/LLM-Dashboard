@@ -6,7 +6,7 @@ import {
   MemoryProfile,
   MemoryTimeSeries,
   PrefillBenchmarkResult,
-} from '@/types/rawBenchmark'
+} from '@/raw/benchmark'
 
 function readRawPrefillBenchmark(filename: string): PrefillBenchmarkResult {
   const filePath = path.resolve(

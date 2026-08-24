@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import Papa from 'papaparse'
-import type { MemoryTimeSeriesPoint } from './benchmark'
+import type { MemoryTimeSeriesPoint } from '../types/benchmark'
 
 export type {
   AcceptanceRateTimeSeries,
@@ -10,7 +10,7 @@ export type {
   Device,
   MemoryTimeSeriesPoint,
   Quantization,
-} from './benchmark'
+} from '../types/benchmark'
 
 // --- Memory vs time: its own struct; sourced from a separate raw CSV. ---
 
@@ -264,7 +264,7 @@ export class ThroughputBenchmarkResult extends BenchmarkResult {
   }
 }
 
-export * from './rawMtpBenchmark'
+export * from './mtpBenchmark'
 
 export interface MemoryProfileSample {
   readonly [field: string]: string | number

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MtpBenchmarkResult } from '@/types/rawMtpBenchmark'
+import { MtpBenchmarkResult } from '@/raw/mtpBenchmark'
 
 describe('raw RTX 3080 MTP benchmark results', () => {
   it('constructs state from qualitative speed MTP OSL 1024 results', () => {
