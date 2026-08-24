@@ -8,14 +8,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { TokensPerSecondDataset, TokensPerSecondSeries } from '@/types/benchmark'
+import type { RawDataset } from '@/types/benchmark'
+import type { TokenRateUploadEntry } from '@/utils/parseDatasets'
 import { FAMILY_COLOR } from '@/utils/chartColors'
 import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
 const BATCH_SIZE_TICKS = [1, 2, 4, 8, 16, 32, 64, 128]
 
 interface PromptIngestionChartProps {
-  data: TokensPerSecondDataset
+  data: RawDataset<TokenRateUploadEntry>
   isCustom?: boolean
   error?: string | null
   onUpload?: (file: File) => void
@@ -27,7 +28,7 @@ interface ChartRow {
   [model: string]: number
 }
 
-function mergeSeriesByTokens(series: readonly TokensPerSecondSeries[]): ChartRow[] {
+function mergeSeriesByTokens(series: readonly TokenRateUploadEntry[]): ChartRow[] {
   const rowsByTokens = new Map<number, ChartRow>()
 
   for (const { model, points } of series) {

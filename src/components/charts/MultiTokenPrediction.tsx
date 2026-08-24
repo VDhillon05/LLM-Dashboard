@@ -9,12 +9,8 @@ import {
   YAxis,
   ZAxis,
 } from 'recharts'
-import type {
-  AcceptanceRateDataset,
-  DecodingSpeedupDataset,
-  ModelFamily,
-} from '@/types/benchmark'
-import { FAMILY_COLOR } from '@/utils/chartColors'
+import type { AcceptanceRateDataset, DecodingSpeedupDataset } from '@/types/benchmark'
+import { getFamilyColor } from '@/utils/chartColors'
 import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
 interface MultiTokenPredictionProps {
@@ -32,7 +28,7 @@ interface MultiTokenPredictionProps {
 
 interface ScatterPoint {
   model: string
-  family: ModelFamily
+  family: string
   speedup: number
   acceptanceRate: number
 }
@@ -81,7 +77,7 @@ function ScatterTooltip({
       <div className="flex items-center gap-2">
         <span
           className="h-2.5 w-2.5 rounded-full"
-          style={{ backgroundColor: FAMILY_COLOR[point.family] }}
+          style={{ backgroundColor: getFamilyColor(point.family) }}
         />
         <span className="text-xs text-zinc-400">{point.model}</span>
       </div>
@@ -195,7 +191,7 @@ export function MultiTokenPrediction({
                   key={family}
                   name={family}
                   data={points.filter((p) => p.family === family)}
-                  fill={FAMILY_COLOR[family]}
+                  fill={getFamilyColor(family)}
                 />
               ))}
             </ScatterChart>

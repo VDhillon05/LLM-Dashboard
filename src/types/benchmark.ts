@@ -1,44 +1,61 @@
 import { readFileSync } from 'node:fs'
+import Papa from 'papaparse'
 
 export type Quantization = 'FP16' | 'Q8_0' | 'Q4_K_M'
-
-export type ModelFamily = 'Llama' | 'Phi' | 'Qwen'
 
 // The hardware profile a benchmark run was captured on. Every dataset below
 // carries a `device` of this type, so swapping in a new run (e.g. RTX 3070
 // in place of RTX 3080) is just a data change — no type/component changes.
 export type Device = 'RTX 3080' | 'RTX 3070' | 'M4 Mac mini'
 
-export type MemoryPhase = 'Prefill' | 'Decode'
-
-// --- Tokens/sec vs token count — shared by the Throughput panel (one point
-// per model/quantization config) and the Prompt Ingestion panel (a sweep
-// across batch size, 1-128). Same underlying measurement, so one struct. ---
-
-export interface TokensPerSecondPoint {
-  tokens: number
-  tokensPerSecond: number
-}
-
-export interface TokensPerSecondSeries {
-  model: string
-  family: ModelFamily
-  quantization?: Quantization
-  points: TokensPerSecondPoint[]
-}
-
 // --- Memory vs time — its own struct; sourced from a separate raw CSV. ---
 
 export interface MemoryTimeSeriesPoint {
-  timeMs: number
-  vramGB: number
-  phase: MemoryPhase
+  readonly timeMs: number
+  readonly vramGB: number
 }
 
-export interface MemoryTimeSeries {
-  model: string
-  family: ModelFamily
-  points: MemoryTimeSeriesPoint[]
+export class MemoryTimeSeries {
+  readonly csvFilePath?: string
+  readonly benchmarkResult?: BenchmarkResult
+  readonly model: string
+  readonly family: string
+  readonly points: readonly MemoryTimeSeriesPoint[]
+
+  constructor(csvFilePath: string, benchmarkJsonFilePath?: string) {
+    if (!csvFilePath.toLowerCase().endsWith('.csv')) {
+      throw new Error(`Expected "${csvFilePath}" to be a .csv file.`)
+    }
+
+    const rows = readCsvRows(csvFilePath)
+    if (rows.length === 0) {
+      throw new Error(`Expected "${csvFilePath}" to contain at least one memory sample.`)
+    }
+
+    const model = readCsvString(rows[0], 'model')
+    const family = readCsvString(rows[0], 'family')
+
+    this.csvFilePath = csvFilePath
+    this.benchmarkResult = benchmarkJsonFilePath
+      ? readBenchmarkResult(benchmarkJsonFilePath)
+      : undefined
+    this.model = model
+    this.family = family
+    this.points = Object.freeze(
+      rows.map((row) => {
+        if (readCsvString(row, 'model') !== model) {
+          throw new Error(`Expected "${csvFilePath}" to contain a single model.`)
+        }
+        if (readCsvString(row, 'family') !== family) {
+          throw new Error(`Expected "${csvFilePath}" to contain a single model family.`)
+        }
+        return Object.freeze({
+          timeMs: readCsvNumber(row, 'timeMs'),
+          vramGB: readCsvNumber(row, 'vramGB'),
+        })
+      }),
+    )
+  }
 }
 
 // --- Token acceptance rate vs time — its own struct; also a separate raw
@@ -52,13 +69,13 @@ export interface AcceptanceRateTimeSeriesPoint {
 
 export interface AcceptanceRateTimeSeries {
   model: string
-  family: ModelFamily
+  family: string
   points: AcceptanceRateTimeSeriesPoint[]
 }
 
 export interface DecodingSpeedupEntry {
   model: string
-  family: ModelFamily
+  family: string
   speedup: number
 }
 
@@ -69,7 +86,7 @@ export interface DecodingSpeedupEntry {
 
 export interface BenchmarkMatrixRow {
   model: string
-  family: ModelFamily
+  family: string
   quantization: Quantization
   batch: number
   prefillTokensPerSecond: number
@@ -109,6 +126,60 @@ function readJsonRecord(jsonFilePath: string): Record<string, unknown> {
   }
 
   return raw[0] as Record<string, unknown>
+}
+
+function readBenchmarkResult(jsonFilePath: string): BenchmarkResult {
+  if (!jsonFilePath.toLowerCase().endsWith('.json')) {
+    throw new Error(`Expected "${jsonFilePath}" to be a .json file.`)
+  }
+
+  const record = readJsonRecord(jsonFilePath)
+  return new BenchmarkResult(
+    jsonFilePath,
+    new BenchmarkModel(record),
+    readString(record, 'gpu_info'),
+    readNumber(record, 'n_depth'),
+    readNumber(record, 'n_batch'),
+    readNumber(record, 'n_ubatch'),
+    readString(record, 'test_time'),
+    readNumber(record, 'avg_ns'),
+    readNumber(record, 'stddev_ns'),
+    readNumber(record, 'avg_ts'),
+    readNumber(record, 'stddev_ts'),
+    readNumberArray(record, 'samples_ns'),
+    readNumberArray(record, 'samples_ts'),
+  )
+}
+
+function readCsvRows(csvFilePath: string): Record<string, string>[] {
+  const result = Papa.parse<Record<string, string>>(readFileSync(csvFilePath, 'utf8'), {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) => header.trim(),
+    transform: (value) => value.trim(),
+  })
+
+  if (result.errors.length > 0) {
+    throw new Error(`CSV parse error in "${csvFilePath}": ${result.errors[0].message}`)
+  }
+
+  return result.data
+}
+
+function readCsvNumber(record: Record<string, string>, key: string): number {
+  const value = Number(record[key])
+  if (Number.isNaN(value)) {
+    throw new Error(`Column "${key}" must be numeric (got "${record[key]}").`)
+  }
+  return value
+}
+
+function readCsvString(record: Record<string, string>, key: string): string {
+  const value = record[key]
+  if (!value) {
+    throw new Error(`Column "${key}" is required.`)
+  }
+  return value
 }
 
 // --- Extracted raw benchmark data ---
@@ -221,6 +292,50 @@ export class ThroughputBenchmarkResult extends BenchmarkResult {
   }
 }
 
+export * from './mtpBenchmark'
+
+export interface MemoryProfileSample {
+  readonly [field: string]: string | number
+}
+
+export class MemoryProfile {
+  readonly csvFilePath: string
+  readonly fields: readonly string[]
+  readonly samples: readonly MemoryProfileSample[]
+
+  constructor(csvFilePath: string) {
+    const csv = readFileSync(csvFilePath, 'utf8')
+    const result = Papa.parse<Record<string, string>>(csv, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim(),
+      transform: (value) => value.trim(),
+    })
+
+    if (result.errors.length > 0) {
+      throw new Error(`CSV parse error in "${csvFilePath}": ${result.errors[0].message}`)
+    }
+
+    const fields = result.meta.fields ?? []
+    if (fields.length === 0) {
+      throw new Error(`Expected "${csvFilePath}" to contain a header row.`)
+    }
+
+    this.csvFilePath = csvFilePath
+    this.fields = Object.freeze([...fields])
+    this.samples = Object.freeze(result.data.map((row) => Object.freeze(coerceMemoryProfileRow(row))))
+  }
+}
+
+function coerceMemoryProfileRow(row: Record<string, string>): MemoryProfileSample {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => {
+      const numericValue = Number(value)
+      return [key, value !== '' && !Number.isNaN(numericValue) ? numericValue : value]
+    }),
+  )
+}
+
 /**
  * Wraps a parsed raw series so nothing downstream can overwrite the source
  * of truth in place. The array lives behind a private field and is frozen
@@ -240,7 +355,6 @@ export class RawDataset<T> {
   }
 }
 
-export type TokensPerSecondDataset = RawDataset<TokensPerSecondSeries>
 export type MemoryDataset = RawDataset<MemoryTimeSeries>
 export type AcceptanceRateDataset = RawDataset<AcceptanceRateTimeSeries>
 export type DecodingSpeedupDataset = RawDataset<DecodingSpeedupEntry>

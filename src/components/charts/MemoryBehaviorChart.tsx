@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { MemoryDataset, MemoryPhase, MemoryTimeSeries } from '@/types/benchmark'
+import type { MemoryDataset, MemoryTimeSeries } from '@/types/benchmark'
 import { FAMILY_COLOR } from '@/utils/chartColors'
 import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
@@ -20,9 +20,8 @@ interface MemoryBehaviorChartProps {
   onReset?: () => void
 }
 
-interface PhaseLine {
+interface MemoryLine {
   model: string
-  phase: MemoryPhase
   dataKey: string
   color: string
 }
@@ -32,40 +31,23 @@ interface ChartRow {
   [dataKey: string]: number
 }
 
-// One line per (model, phase): dashed = Prefill, solid = Decode, colored by
-// model family so identity stays consistent with the other charts. The
-// boundary point is duplicated into both phase segments so the two halves
-// connect visually instead of leaving a gap.
-function buildPhaseLines(series: readonly MemoryTimeSeries[]): {
+function buildMemoryLines(series: readonly MemoryTimeSeries[]): {
   rows: ChartRow[]
-  lines: PhaseLine[]
+  lines: MemoryLine[]
 } {
   const rowsByTime = new Map<number, ChartRow>()
-  const lines: PhaseLine[] = []
+  const lines: MemoryLine[] = []
 
   for (const { model, family, points } of series) {
     const sorted = [...points].sort((a, b) => a.timeMs - b.timeMs)
-    const prefill = sorted.filter((p) => p.phase === 'Prefill')
-    const decode = sorted.filter((p) => p.phase === 'Decode')
+    if (sorted.length === 0) continue
 
-    if (prefill.length > 0 && decode.length > 0) {
-      prefill.push(decode[0])
-      decode.unshift(prefill[prefill.length - 2] ?? prefill[0])
-    }
+    lines.push({ model, dataKey: model, color: FAMILY_COLOR[family] })
 
-    for (const [phase, phasePoints] of [
-      ['Prefill', prefill],
-      ['Decode', decode],
-    ] as const) {
-      if (phasePoints.length === 0) continue
-      const dataKey = `${model}__${phase}`
-      lines.push({ model, phase, dataKey, color: FAMILY_COLOR[family] })
-
-      for (const point of phasePoints) {
-        const row = rowsByTime.get(point.timeMs) ?? { timeMs: point.timeMs }
-        row[dataKey] = point.vramGB
-        rowsByTime.set(point.timeMs, row)
-      }
+    for (const point of sorted) {
+      const row = rowsByTime.get(point.timeMs) ?? { timeMs: point.timeMs }
+      row[model] = point.vramGB
+      rowsByTime.set(point.timeMs, row)
     }
   }
 
@@ -90,7 +72,7 @@ function MemoryTooltip({
         {payload.map((entry) => (
           <div key={entry.dataKey} className="flex items-center gap-2">
             <span className="h-[2px] w-3" style={{ backgroundColor: entry.color }} />
-            <span className="text-xs text-zinc-400">{entry.dataKey.replace('__', ' · ')}</span>
+            <span className="text-xs text-zinc-400">{entry.dataKey}</span>
             <span className="ml-auto text-sm font-semibold text-zinc-100">
               {entry.value.toFixed(1)} GB
             </span>
@@ -108,7 +90,7 @@ export function MemoryBehaviorChart({
   onUpload,
   onReset,
 }: MemoryBehaviorChartProps) {
-  const { rows, lines } = buildPhaseLines(data.series)
+  const { rows, lines } = buildMemoryLines(data.series)
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
@@ -160,17 +142,15 @@ export function MemoryBehaviorChart({
                 verticalAlign="top"
                 height={28}
                 wrapperStyle={{ fontSize: 11, color: '#a1a1aa' }}
-                formatter={(value: string) => value.replace('__', ' · ')}
               />
               {lines.map((line) => (
                 <Line
                   key={line.dataKey}
                   dataKey={line.dataKey}
-                  name={line.dataKey}
+                  name={line.model}
                   type="monotone"
                   stroke={line.color}
                   strokeWidth={2}
-                  strokeDasharray={line.phase === 'Prefill' ? '4 4' : undefined}
                   dot={false}
                   activeDot={{ r: 4 }}
                   connectNulls={false}

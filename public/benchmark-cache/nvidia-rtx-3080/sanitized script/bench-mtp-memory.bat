@@ -173,7 +173,7 @@ set "OSL=%~4"
 set "RUN_LIMIT=%~5"
 set "OUT_JSON=%~6"
 set "RUN_NAME=mtp_n%MTP_N%_%BENCH%_%CATEGORY%_osl%OSL%"
-set "GPU_CSV=%RESULTS_DIR%\%RUN_NAME%.gpu.csv"
+set "GPU_CSV=%RESULTS_DIR%\%RUN_NAME%.csv"
 set "LOGGER_TITLE=llama-server-gpu-memory-logger-%RUN_NAME%-%RANDOM%"
 
 echo %MTP_N%,%BENCH%,%CATEGORY%,%OSL%,1,0,"%OUT_JSON%","%GPU_CSV%","!SERVER_LOG!" >> "%RUN_INDEX%"

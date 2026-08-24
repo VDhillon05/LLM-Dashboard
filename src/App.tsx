@@ -13,7 +13,6 @@ import {
   type DecodingSpeedupEntry,
   type Device,
   type MemoryTimeSeries,
-  type TokensPerSecondSeries,
 } from '@/types/benchmark'
 import {
   parseAcceptanceRateFile,
@@ -21,17 +20,18 @@ import {
   parseDecodingSpeedupFile,
   parseMemoryFile,
   parseTokensPerSecondFile,
+  type TokenRateUploadEntry,
 } from '@/utils/parseDatasets'
 
 const device = (benchmarks.device || 'RTX 3080') as Device
 
-const defaultThroughput = new RawDataset<TokensPerSecondSeries>(
+const defaultThroughput = new RawDataset<TokenRateUploadEntry>(
   device,
-  benchmarks.tokensPerSecond as TokensPerSecondSeries[],
+  benchmarks.tokensPerSecond as TokenRateUploadEntry[],
 )
-const defaultPromptIngestion = new RawDataset<TokensPerSecondSeries>(
+const defaultPromptIngestion = new RawDataset<TokenRateUploadEntry>(
   device,
-  benchmarks.tokensPerSecond as TokensPerSecondSeries[],
+  benchmarks.tokensPerSecond as TokenRateUploadEntry[],
 )
 const defaultMemory = new RawDataset<MemoryTimeSeries>(
   device,
