@@ -1,9 +1,8 @@
-import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { BenchmarkModel, BenchmarkResult } from '@/types/benchmark'
+import { BenchmarkModel, BenchmarkResult, PrefillBenchmarkResult } from '@/types/benchmark'
 
-async function readRawPrefillBenchmark(filename: string): Promise<BenchmarkResult> {
+function readRawPrefillBenchmark(filename: string): PrefillBenchmarkResult {
   const filePath = path.resolve(
     process.cwd(),
     'public',
@@ -13,30 +12,26 @@ async function readRawPrefillBenchmark(filename: string): Promise<BenchmarkResul
     'raw',
     filename,
   )
-  const text = await readFile(filePath, 'utf8')
-  const results = JSON.parse(text) as unknown
-
-  if (!Array.isArray(results) || results.length === 0) {
-    throw new Error(`Expected ${filename} to contain at least one benchmark result.`)
-  }
-
-  return BenchmarkResult.fromRaw(results[0] as Record<string, unknown>)
+  return new PrefillBenchmarkResult(filePath)
 }
 
 describe('raw RTX 3080 prefill benchmark results', () => {
   it('extracts the Llama prefill benchmark result into the benchmark model classes', async () => {
-    const result = await readRawPrefillBenchmark(
+    const result = readRawPrefillBenchmark(
       'Llama-3.2-3B-Instruct-Q8_0_p1024_b2048_ub1024_n0_r100.json',
     )
 
+    expect(result).toBeInstanceOf(PrefillBenchmarkResult)
     expect(result).toBeInstanceOf(BenchmarkResult)
+    expect(result.jsonFilePath).toContain(
+      'Llama-3.2-3B-Instruct-Q8_0_p1024_b2048_ub1024_n0_r100.json',
+    )
     expect(result.model).toBeInstanceOf(BenchmarkModel)
     expect(result.model.modelType).toBe('llama 3B Q8_0')
     expect(result.model.modelSize).toBe(3414061312)
     expect(result.model.modelNParams).toBe(3212749888)
     expect(result.gpuInfo).toBe('NVIDIA GeForce RTX 3080')
     expect(result.nPrompt).toBe(1024)
-    expect(result.nGen).toBe(0)
     expect(result.nDepth).toBe(0)
     expect(result.nBatch).toBe(2048)
     expect(result.nUbatch).toBe(1024)

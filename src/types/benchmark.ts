@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 export type Quantization = 'FP16' | 'Q8_0' | 'Q4_K_M'
 
 export type ModelFamily = 'Llama' | 'Phi' | 'Qwen'
@@ -99,6 +101,16 @@ function readNumberArray(record: Record<string, unknown>, key: string): number[]
   return value
 }
 
+function readJsonRecord(jsonFilePath: string): Record<string, unknown> {
+  const raw = JSON.parse(readFileSync(jsonFilePath, 'utf8')) as unknown
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`Expected "${jsonFilePath}" to contain at least one benchmark result.`)
+  }
+
+  return raw[0] as Record<string, unknown>
+}
+
 // --- Extracted raw benchmark data ---
 
 export class BenchmarkModel {
@@ -106,26 +118,17 @@ export class BenchmarkModel {
   readonly modelSize: number
   readonly modelNParams: number
 
-  constructor(modelType: string, modelSize: number, modelNParams: number) {
-    this.modelType = modelType
-    this.modelSize = modelSize
-    this.modelNParams = modelNParams
-  }
-
-  static fromRaw(record: Record<string, unknown>): BenchmarkModel {
-    return new BenchmarkModel(
-      readString(record, 'model_type'),
-      readNumber(record, 'model_size'),
-      readNumber(record, 'model_n_params'),
-    )
+  constructor(record: Record<string, unknown>) {
+    this.modelType = readString(record, 'model_type')
+    this.modelSize = readNumber(record, 'model_size')
+    this.modelNParams = readNumber(record, 'model_n_params')
   }
 }
 
 export class BenchmarkResult {
+  readonly jsonFilePath: string
   readonly model: BenchmarkModel
   readonly gpuInfo: string
-  readonly nPrompt: number
-  readonly nGen: number
   readonly nDepth: number
   readonly nBatch: number
   readonly nUbatch: number
@@ -138,10 +141,9 @@ export class BenchmarkResult {
   readonly samplesTs: readonly number[]
 
   constructor(
+    jsonFilePath: string,
     model: BenchmarkModel,
     gpuInfo: string,
-    nPrompt: number,
-    nGen: number,
     nDepth: number,
     nBatch: number,
     nUbatch: number,
@@ -153,10 +155,9 @@ export class BenchmarkResult {
     samplesNs: number[],
     samplesTs: number[],
   ) {
+    this.jsonFilePath = jsonFilePath
     this.model = model
     this.gpuInfo = gpuInfo
-    this.nPrompt = nPrompt
-    this.nGen = nGen
     this.nDepth = nDepth
     this.nBatch = nBatch
     this.nUbatch = nUbatch
@@ -168,13 +169,18 @@ export class BenchmarkResult {
     this.samplesNs = Object.freeze([...samplesNs])
     this.samplesTs = Object.freeze([...samplesTs])
   }
+}
 
-  static fromRaw(record: Record<string, unknown>): BenchmarkResult {
-    return new BenchmarkResult(
-      BenchmarkModel.fromRaw(record),
+export class PrefillBenchmarkResult extends BenchmarkResult {
+  readonly nPrompt: number
+
+  constructor(jsonFilePath: string) {
+    const record = readJsonRecord(jsonFilePath)
+
+    super(
+      jsonFilePath,
+      new BenchmarkModel(record),
       readString(record, 'gpu_info'),
-      readNumber(record, 'n_prompt'),
-      readNumber(record, 'n_gen'),
       readNumber(record, 'n_depth'),
       readNumber(record, 'n_batch'),
       readNumber(record, 'n_ubatch'),
@@ -186,6 +192,32 @@ export class BenchmarkResult {
       readNumberArray(record, 'samples_ns'),
       readNumberArray(record, 'samples_ts'),
     )
+    this.nPrompt = readNumber(record, 'n_prompt')
+  }
+}
+
+export class ThroughputBenchmarkResult extends BenchmarkResult {
+  readonly nGen: number
+
+  constructor(jsonFilePath: string) {
+    const record = readJsonRecord(jsonFilePath)
+
+    super(
+      jsonFilePath,
+      new BenchmarkModel(record),
+      readString(record, 'gpu_info'),
+      readNumber(record, 'n_depth'),
+      readNumber(record, 'n_batch'),
+      readNumber(record, 'n_ubatch'),
+      readString(record, 'test_time'),
+      readNumber(record, 'avg_ns'),
+      readNumber(record, 'stddev_ns'),
+      readNumber(record, 'avg_ts'),
+      readNumber(record, 'stddev_ts'),
+      readNumberArray(record, 'samples_ns'),
+      readNumberArray(record, 'samples_ts'),
+    )
+    this.nGen = readNumber(record, 'n_gen')
   }
 }
 
