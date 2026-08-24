@@ -11,8 +11,6 @@ import {
 } from '@/types/benchmark'
 import {
   MtpBenchmarkResult,
-  MtpQualitativeBenchmarkResult,
-  MtpThroughputBenchmarkResult,
 } from '@/types/mtpBenchmark'
 
 function readRawPrefillBenchmark(filename: string): PrefillBenchmarkResult {
@@ -133,9 +131,8 @@ describe('raw RTX 3080 MTP benchmark results', () => {
       'memory',
       'mtp_n1_qualitative_all_osl1024_tokens.json',
     )
-    const result = new MtpQualitativeBenchmarkResult(filePath)
+    const result = new MtpBenchmarkResult(filePath)
 
-    expect(result).toBeInstanceOf(MtpQualitativeBenchmarkResult)
     expect(result).toBeInstanceOf(MtpBenchmarkResult)
     expect(result.jsonFilePath).toBe(filePath)
     expect(result.completedSamples).toBe(11)
@@ -171,9 +168,8 @@ describe('raw RTX 3080 MTP benchmark results', () => {
       'speed',
       'mtp_n1_throughput_1k_high_entropy_osl2048.json',
     )
-    const result = new MtpThroughputBenchmarkResult(filePath)
+    const result = new MtpBenchmarkResult(filePath)
 
-    expect(result).toBeInstanceOf(MtpThroughputBenchmarkResult)
     expect(result).toBeInstanceOf(MtpBenchmarkResult)
     expect(result.config.bench).toBe('throughput_1k')
     expect(result.config.category).toBe('high_entropy')
@@ -187,8 +183,8 @@ describe('raw RTX 3080 MTP benchmark results', () => {
     })
   })
 
-  it('rejects an MTP benchmark loaded through the wrong subclass', () => {
-    const filePath = path.resolve(
+  it('rejects an unknown MTP benchmark config type', () => {
+    const sourcePath = path.resolve(
       process.cwd(),
       'public',
       'benchmark-cache',
@@ -198,10 +194,22 @@ describe('raw RTX 3080 MTP benchmark results', () => {
       'speed',
       'mtp_n1_throughput_1k_high_entropy_osl2048.json',
     )
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'mtp-benchmark-'))
+    const tempPath = path.join(tempDir, 'unknown-bench.json')
 
-    expect(() => new MtpQualitativeBenchmarkResult(filePath)).toThrow(
-      'Expected',
-    )
+    try {
+      const benchmark = JSON.parse(readFileSync(sourcePath, 'utf8')) as {
+        config: { bench: string }
+      }
+      benchmark.config.bench = 'latency_1k'
+      writeFileSync(tempPath, JSON.stringify(benchmark), 'utf8')
+
+      expect(() => new MtpBenchmarkResult(tempPath)).toThrow(
+        'Expected "bench" to be qualitative or throughput MTP data',
+      )
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
   })
 
   it('rejects MTP results that contradict the selected config category', () => {
@@ -225,7 +233,7 @@ describe('raw RTX 3080 MTP benchmark results', () => {
       benchmark.results[0].category = 'low_entropy'
       writeFileSync(tempPath, JSON.stringify(benchmark), 'utf8')
 
-      expect(() => new MtpThroughputBenchmarkResult(tempPath)).toThrow(
+      expect(() => new MtpBenchmarkResult(tempPath)).toThrow(
         'to match config category "high_entropy"',
       )
     } finally {

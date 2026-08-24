@@ -75,7 +75,7 @@ function readJsonObject(jsonFilePath: string): Record<string, unknown> {
   return raw
 }
 
-export type MtpBenchmarkBench = 'qualitative' | `throughput_${string}`
+export type MtpBenchmarkBench = string
 export type MtpThroughputBenchmarkCategory = 'high_entropy' | 'low_entropy' | 'mixed'
 export type MtpQualitativeBenchmarkCategory =
   | 'all'
@@ -109,12 +109,7 @@ const MTP_QUALITATIVE_CATEGORIES = [
   'writing',
 ] as const
 
-interface MtpBenchmarkConfigBase<
-  TBench extends MtpBenchmarkBench,
-  TCategory extends MtpBenchmarkCategory,
-> {
-  readonly bench: TBench
-  readonly category: TCategory
+interface MtpBenchmarkConfigCommon {
   readonly concurrency: number
   readonly extraInputs: Readonly<Record<string, string | number | boolean | null>>
   readonly model: string | null
@@ -122,14 +117,16 @@ interface MtpBenchmarkConfigBase<
   readonly url: string
 }
 
-export type MtpQualitativeBenchmarkConfig = MtpBenchmarkConfigBase<
-  'qualitative',
-  MtpQualitativeBenchmarkCategory
->
-export type MtpThroughputBenchmarkConfig = MtpBenchmarkConfigBase<
-  `throughput_${string}`,
-  MtpThroughputBenchmarkCategory
->
+export interface MtpQualitativeBenchmarkConfig extends MtpBenchmarkConfigCommon {
+  readonly bench: 'qualitative'
+  readonly category: MtpQualitativeBenchmarkCategory
+}
+
+export interface MtpThroughputBenchmarkConfig extends MtpBenchmarkConfigCommon {
+  readonly bench: string
+  readonly category: MtpThroughputBenchmarkCategory
+}
+
 export type MtpBenchmarkConfig = MtpQualitativeBenchmarkConfig | MtpThroughputBenchmarkConfig
 
 export interface MtpBenchmarkSample {
@@ -187,23 +184,35 @@ export class MtpBenchmarkResult {
     this.summary = Object.freeze(
       readRecordArray(record, 'summary').map((summary) => Object.freeze(readMtpBenchmarkSummary(summary))),
     )
+
+    this.assertCategoriesMatchConfig()
+    this.assertSelectedCategoryIsConsistent()
   }
 
-  protected assertBench(matches: (bench: MtpBenchmarkBench) => boolean, expected: string): void {
-    if (!matches(this.config.bench)) {
+  private assertCategoriesMatchConfig(): void {
+    if (this.config.bench === 'qualitative') {
+      this.assertCategories(isMtpQualitativeBenchmarkCategory, 'qualitative')
+    } else if (this.config.bench.startsWith('throughput_')) {
+      this.assertCategories(isMtpThroughputBenchmarkCategory, 'throughput')
+    } else {
       throw new Error(
-        `Expected "${this.jsonFilePath}" to contain ${expected} MTP data (got "${this.config.bench}").`,
+        `Expected "${this.jsonFilePath}" to contain qualitative or throughput MTP data (got "${this.config.bench}").`,
       )
     }
   }
 
-  protected assertResultCategories(
+  private assertCategories(
     matches: (category: MtpBenchmarkCategory) => boolean,
     expected: string,
   ): void {
     const categories = [
       this.config.category,
       ...this.results.map((result) => result.category),
+      ...this.summary
+        .filter((summary): summary is MtpBenchmarkSummary & { category: MtpBenchmarkCategory } =>
+          summary.category !== 'overall',
+        )
+        .map((summary) => summary.category),
     ]
     const invalid = categories.find((category) => !matches(category))
 
@@ -214,7 +223,7 @@ export class MtpBenchmarkResult {
     }
   }
 
-  protected assertSelectedCategoryIsConsistent(): void {
+  private assertSelectedCategoryIsConsistent(): void {
     const category = this.config.category
     if (category === 'all') {
       return
@@ -238,30 +247,9 @@ export class MtpBenchmarkResult {
   }
 }
 
-export class MtpQualitativeBenchmarkResult extends MtpBenchmarkResult {
-  constructor(jsonFilePath: string) {
-    super(jsonFilePath)
-    this.assertBench((bench) => bench === 'qualitative', 'qualitative')
-    this.assertResultCategories(isMtpQualitativeBenchmarkCategory, 'qualitative')
-    this.assertSelectedCategoryIsConsistent()
-  }
-}
-
-export class MtpThroughputBenchmarkResult extends MtpBenchmarkResult {
-  constructor(jsonFilePath: string) {
-    super(jsonFilePath)
-    this.assertBench((bench) => bench.startsWith('throughput_'), 'throughput')
-    this.assertResultCategories(isMtpThroughputBenchmarkCategory, 'throughput')
-    this.assertSelectedCategoryIsConsistent()
-  }
-}
-
 function readMtpBenchmarkConfig(record: Record<string, unknown>): MtpBenchmarkConfig {
-  const bench = readMtpBenchmarkBench(record, 'bench')
-  const category = readMtpBenchmarkCategory(record, 'category')
-  const config = {
-    bench,
-    category,
+  const bench = readString(record, 'bench')
+  const common = {
     concurrency: readNumber(record, 'concurrency'),
     extraInputs: Object.freeze(readMtpExtraInputs(readRecord(record, 'extra_inputs'))),
     model: readNullableString(record, 'model'),
@@ -270,16 +258,30 @@ function readMtpBenchmarkConfig(record: Record<string, unknown>): MtpBenchmarkCo
   }
 
   if (bench === 'qualitative') {
+    const category = readString(record, 'category')
     if (!isMtpQualitativeBenchmarkCategory(category)) {
       throw new Error(`Expected qualitative MTP config category (got "${category}").`)
     }
-    return Object.freeze(config) as MtpQualitativeBenchmarkConfig
+    return Object.freeze({
+      bench,
+      category,
+      ...common,
+    })
   }
 
+  if (!bench.startsWith('throughput_')) {
+    throw new Error(`Expected "bench" to be qualitative or throughput MTP data (got "${bench}").`)
+  }
+
+  const category = readString(record, 'category')
   if (!isMtpThroughputBenchmarkCategory(category)) {
     throw new Error(`Expected throughput MTP config category (got "${category}").`)
   }
-  return Object.freeze(config) as MtpThroughputBenchmarkConfig
+  return Object.freeze({
+    bench,
+    category,
+    ...common,
+  })
 }
 
 function readMtpExtraInputs(
@@ -298,14 +300,6 @@ function readMtpExtraInputs(
       return [key, value]
     }),
   )
-}
-
-function readMtpBenchmarkBench(record: Record<string, unknown>, key: string): MtpBenchmarkBench {
-  const value = readString(record, key)
-  if (value === 'qualitative' || value.startsWith('throughput_')) {
-    return value as MtpBenchmarkBench
-  }
-  throw new Error(`Expected "${key}" to be qualitative or throughput MTP data (got "${value}").`)
 }
 
 function readMtpBenchmarkCategory(record: Record<string, unknown>, key: string): MtpBenchmarkCategory {
