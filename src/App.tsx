@@ -15,6 +15,7 @@ import {
   type DecodingSpeedupEntry,
   type Device,
   type MemoryTimeSeries,
+  type TokensPerSecondSeries,
 } from '@/types/benchmark'
 import {
   parseAcceptanceRateFile,
@@ -22,7 +23,6 @@ import {
   parseDecodingSpeedupFile,
   parseMemoryFile,
   parseTokensPerSecondFile,
-  type TokenRateUploadEntry,
 } from '@/utils/parseDatasets'
 
 const cachedDevice = (benchmarks.device || 'RTX 3080') as Device

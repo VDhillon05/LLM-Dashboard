@@ -6,6 +6,7 @@ import type {
   Device,
   MemoryTimeSeries,
   Quantization,
+  TokensPerSecondSeries,
 } from '@/types/benchmark'
 import { RawDataset } from '@/types/benchmark'
 
@@ -27,15 +28,7 @@ function freezeMemoryTimeSeries(series: readonly MemoryTimeSeries[]): MemoryTime
   )
 }
 
-export interface TokenRateUploadEntry {
-  model: string
-  family: string
-  quantization?: Quantization
-  points: {
-    tokens: number
-    tokensPerSecond: number
-  }[]
-}
+export type TokenRateUploadEntry = TokensPerSecondSeries
 
 function parseCsvRows(text: string): Record<string, string>[] {
   const result = Papa.parse<Record<string, string>>(text, {

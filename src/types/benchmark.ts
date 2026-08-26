@@ -13,6 +13,16 @@ export interface MemoryTimeSeries {
   readonly points: readonly MemoryTimeSeriesPoint[]
 }
 
+export interface TokensPerSecondSeries {
+  model: string
+  family: string
+  quantization?: Quantization
+  points: {
+    tokens: number
+    tokensPerSecond: number
+  }[]
+}
+
 export interface AcceptanceRateTimeSeriesPoint {
   timeMs: number
   acceptanceRate: number
@@ -44,8 +54,8 @@ export class RawDataset<T> {
   readonly device: Device
   readonly #series: readonly T[]
 
-  constructor(device: Device, series: T[]) {
-    this.device = device
+  constructor(cachedDevice: Device, series: T[]) {
+    this.device = cachedDevice
     this.#series = Object.freeze([...series])
   }
 
@@ -55,12 +65,12 @@ export class RawDataset<T> {
 }
 
 /**
- * Returns `dataset` unchanged if it belongs to `device`, otherwise an empty
- * dataset for that device — so switching the nav's device filter reliably
+ * Returns `dataset` unchanged if it belongs to `cachedDevice`, otherwise an empty
+ * dataset for that cached device — so switching the nav's device filter reliably
  * clears panels that only have data for the previously selected device.
  */
-export function filterDatasetByDevice<T>(dataset: RawDataset<T>, device: Device): RawDataset<T> {
-  return dataset.device === device ? dataset : new RawDataset<T>(device, [])
+export function filterDatasetByDevice<T>(dataset: RawDataset<T>, cachedDevice: Device): RawDataset<T> {
+  return dataset.device === cachedDevice ? dataset : new RawDataset<T>(cachedDevice, [])
 }
 
 export type TokensPerSecondDataset = RawDataset<TokensPerSecondSeries>
