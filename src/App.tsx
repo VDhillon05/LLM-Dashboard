@@ -5,9 +5,11 @@ import { MemoryBehaviorChart } from '@/components/charts/MemoryBehaviorChart'
 import { MultiTokenPrediction } from '@/components/charts/MultiTokenPrediction'
 import { BenchmarkTable } from '@/components/table/BenchmarkTable'
 import { useUploadableDataset } from '@/hooks/useUploadableDataset'
+import { FilterProvider, useFilterContext } from '@/context/FilterContext'
 import benchmarks from '@/data/benchmarks.json'
 import {
   RawDataset,
+  filterDatasetByDevice,
   type AcceptanceRateTimeSeries,
   type BenchmarkMatrixRow,
   type DecodingSpeedupEntry,
@@ -23,49 +25,53 @@ import {
   parseTokensPerSecondFile,
 } from '@/utils/parseDatasets'
 
-const device = (benchmarks.device || 'RTX 3080') as Device
+const cachedDevice = (benchmarks.device || 'RTX 3080') as Device
 
 const defaultThroughput = new RawDataset<TokensPerSecondSeries>(
-  device,
+  cachedDevice,
   benchmarks.tokensPerSecond as TokensPerSecondSeries[],
 )
 const defaultPromptIngestion = new RawDataset<TokensPerSecondSeries>(
-  device,
+  cachedDevice,
   benchmarks.tokensPerSecond as TokensPerSecondSeries[],
 )
 const defaultMemory = new RawDataset<MemoryTimeSeries>(
-  device,
+  cachedDevice,
   benchmarks.memory as MemoryTimeSeries[],
 )
 const defaultAcceptanceRate = new RawDataset<AcceptanceRateTimeSeries>(
-  device,
+  cachedDevice,
   benchmarks.acceptanceRate as AcceptanceRateTimeSeries[],
 )
 const defaultDecodingSpeedup = new RawDataset<DecodingSpeedupEntry>(
-  device,
+  cachedDevice,
   benchmarks.decodingSpeedup as DecodingSpeedupEntry[],
 )
 const defaultBenchmarkMatrix = new RawDataset<BenchmarkMatrixRow>(
-  device,
+  cachedDevice,
   benchmarks.benchmarkMatrix as BenchmarkMatrixRow[],
 )
 
-function App() {
+function DashboardContent() {
+  const { activeDevice } = useFilterContext()
+
   const throughput = useUploadableDataset(defaultThroughput, (file) =>
-    parseTokensPerSecondFile(file, device),
+    parseTokensPerSecondFile(file, activeDevice),
   )
   const promptIngestion = useUploadableDataset(defaultPromptIngestion, (file) =>
-    parseTokensPerSecondFile(file, device),
+    parseTokensPerSecondFile(file, activeDevice),
   )
-  const memory = useUploadableDataset(defaultMemory, (file) => parseMemoryFile(file, device))
+  const memory = useUploadableDataset(defaultMemory, (file) =>
+    parseMemoryFile(file, activeDevice),
+  )
   const decodingSpeedup = useUploadableDataset(defaultDecodingSpeedup, (file) =>
-    parseDecodingSpeedupFile(file, device),
+    parseDecodingSpeedupFile(file, activeDevice),
   )
   const acceptanceRate = useUploadableDataset(defaultAcceptanceRate, (file) =>
-    parseAcceptanceRateFile(file, device),
+    parseAcceptanceRateFile(file, activeDevice),
   )
   const benchmarkMatrix = useUploadableDataset(defaultBenchmarkMatrix, (file) =>
-    parseBenchmarkMatrixFile(file, device),
+    parseBenchmarkMatrixFile(file, activeDevice),
   )
 
   return (
@@ -76,35 +82,35 @@ function App() {
             LLM Benchmark Report
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Performance metrics across local hardware configurations.
+            Performance metrics for {activeDevice}.
           </p>
         </section>
 
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <ThroughputChart
-            data={throughput.dataset}
+            data={filterDatasetByDevice(throughput.dataset, activeDevice)}
             isCustom={throughput.isCustom}
             error={throughput.error}
             onUpload={throughput.uploadFile}
             onReset={throughput.resetToDefault}
           />
           <PromptIngestionChart
-            data={promptIngestion.dataset}
+            data={filterDatasetByDevice(promptIngestion.dataset, activeDevice)}
             isCustom={promptIngestion.isCustom}
             error={promptIngestion.error}
             onUpload={promptIngestion.uploadFile}
             onReset={promptIngestion.resetToDefault}
           />
           <MemoryBehaviorChart
-            data={memory.dataset}
+            data={filterDatasetByDevice(memory.dataset, activeDevice)}
             isCustom={memory.isCustom}
             error={memory.error}
             onUpload={memory.uploadFile}
             onReset={memory.resetToDefault}
           />
           <MultiTokenPrediction
-            decodingSpeedup={decodingSpeedup.dataset}
-            acceptanceRate={acceptanceRate.dataset}
+            decodingSpeedup={filterDatasetByDevice(decodingSpeedup.dataset, activeDevice)}
+            acceptanceRate={filterDatasetByDevice(acceptanceRate.dataset, activeDevice)}
             speedupIsCustom={decodingSpeedup.isCustom}
             speedupError={decodingSpeedup.error}
             onUploadSpeedup={decodingSpeedup.uploadFile}
@@ -118,7 +124,7 @@ function App() {
 
         <section>
           <BenchmarkTable
-            data={benchmarkMatrix.dataset}
+            data={filterDatasetByDevice(benchmarkMatrix.dataset, activeDevice)}
             isCustom={benchmarkMatrix.isCustom}
             error={benchmarkMatrix.error}
             onUpload={benchmarkMatrix.uploadFile}
@@ -127,6 +133,14 @@ function App() {
         </section>
       </div>
     </DashboardLayout>
+  )
+}
+
+function App() {
+  return (
+    <FilterProvider>
+      <DashboardContent />
+    </FilterProvider>
   )
 }
 
