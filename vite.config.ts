@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
@@ -14,5 +14,10 @@ export default defineConfig({
     watch: {
       ignored: ['**/.vs/**'],
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './tests/setup/vitest.setup.ts',
   },
 })

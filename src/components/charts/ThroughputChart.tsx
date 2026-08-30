@@ -8,12 +8,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { ModelFamily, TokensPerSecondDataset, TokensPerSecondSeries } from '@/types/benchmark'
-import { FAMILY_COLOR } from '@/utils/chartColors'
+import type { RawDataset } from '@/types/benchmark'
+import type { TokenRateUploadEntry } from '@/utils/parseDatasets'
+import { FAMILY_COLOR, getFamilyColor } from '@/utils/chartColors'
 import { DatasetUploadControls } from '@/components/ui/DatasetUploadControls'
 
 interface ThroughputChartProps {
-  data: TokensPerSecondDataset
+  data: RawDataset<TokenRateUploadEntry>
   isCustom?: boolean
   error?: string | null
   onUpload?: (file: File) => void
@@ -24,13 +25,13 @@ interface ChartRow {
   label: string
   model: string
   quantization?: string
-  family: ModelFamily
+  family: string
   tokensPerSecond: number
 }
 
 // Throughput is a single reading per (model, quantization) config, so each
 // series collapses to its first point.
-function toChartRows(series: readonly TokensPerSecondSeries[]): ChartRow[] {
+function toChartRows(series: readonly TokenRateUploadEntry[]): ChartRow[] {
   return series
     .filter((entry) => entry.points.length > 0)
     .map((entry) => ({
@@ -58,7 +59,7 @@ function ThroughputTooltip({
       <div className="flex items-center gap-2">
         <span
           className="h-[2px] w-3"
-          style={{ backgroundColor: FAMILY_COLOR[row.family] }}
+          style={{ backgroundColor: getFamilyColor(row.family) }}
         />
         <span className="text-xs text-zinc-400">{row.label}</span>
       </div>
@@ -70,7 +71,7 @@ function ThroughputTooltip({
 }
 
 function Legend() {
-  const families = Object.keys(FAMILY_COLOR) as ModelFamily[]
+  const families = Object.keys(FAMILY_COLOR)
   return (
     <div className="flex items-center gap-4 px-1">
       {families.map((family) => (
@@ -156,7 +157,7 @@ export function ThroughputChart({
                 />
                 <Bar dataKey="tokensPerSecond" radius={[0, 4, 4, 0]}>
                   {rows.map((row) => (
-                    <Cell key={row.label} fill={FAMILY_COLOR[row.family]} />
+                    <Cell key={row.label} fill={getFamilyColor(row.family)} />
                   ))}
                 </Bar>
               </BarChart>

@@ -5,18 +5,30 @@ import type {
   DecodingSpeedupEntry,
   Device,
   MemoryTimeSeries,
-  ModelFamily,
   Quantization,
   TokensPerSecondSeries,
 } from '@/types/benchmark'
 import { RawDataset } from '@/types/benchmark'
 
-const FAMILIES = new Set<string>(['Llama', 'Phi', 'Qwen'])
 const QUANTIZATIONS = new Set<string>(['FP16', 'Q8_0', 'Q4_K_M'])
 
-function isFamily(value: unknown): value is ModelFamily {
-  return typeof value === 'string' && FAMILIES.has(value)
+type MutableMemoryTimeSeries = {
+  model: string
+  family: string
+  points: { timeMs: number; vramGB: number }[]
 }
+
+function freezeMemoryTimeSeries(series: readonly MemoryTimeSeries[]): MemoryTimeSeries[] {
+  return series.map((entry) =>
+    Object.freeze({
+      model: entry.model,
+      family: entry.family,
+      points: Object.freeze(entry.points.map((point) => Object.freeze({ ...point }))),
+    }),
+  )
+}
+
+export type TokenRateUploadEntry = TokensPerSecondSeries
 
 function parseCsvRows(text: string): Record<string, string>[] {
   const result = Papa.parse<Record<string, string>>(text, {
@@ -38,13 +50,6 @@ function requireNumber(row: Record<string, string>, column: string): number {
   return value
 }
 
-function requireFamily(row: Record<string, string>): ModelFamily {
-  if (!isFamily(row.family)) {
-    throw new Error(`Column "family" must be one of Llama/Phi/Qwen (got "${row.family}").`)
-  }
-  return row.family
-}
-
 function requireQuantization(row: Record<string, string>): Quantization {
   if (!QUANTIZATIONS.has(row.quantization)) {
     throw new Error(
@@ -60,13 +65,14 @@ async function readFile(file: File): Promise<{ text: string; isCsv: boolean }> {
   return { text, isCsv }
 }
 
-// --- Tokens/sec vs tokens (Throughput + Prompt Ingestion) ---
+// --- Token rate vs tokens (Throughput + Prompt Ingestion) ---
 
-function groupIntoTokensPerSecondSeries(rows: Record<string, string>[]): TokensPerSecondSeries[] {
-  const seriesByModel = new Map<string, TokensPerSecondSeries>()
+function groupIntoTokenRateEntries(rows: Record<string, string>[]): TokenRateUploadEntry[] {
+  const entriesByModel = new Map<string, TokenRateUploadEntry>()
 
   for (const row of rows) {
-    const family = requireFamily(row)
+    const family = row.family
+    if (!family) throw new Error('Column "family" is required.')
     const model = row.model
     if (!model) throw new Error('Column "model" is required.')
 
@@ -75,29 +81,29 @@ function groupIntoTokensPerSecondSeries(rows: Record<string, string>[]): TokensP
       : undefined
     const key = quantization ? `${model}::${quantization}` : model
 
-    const series = seriesByModel.get(key) ?? { model, family, quantization, points: [] }
-    series.points.push({
+    const entry = entriesByModel.get(key) ?? { model, family, quantization, points: [] }
+    entry.points.push({
       tokens: requireNumber(row, 'tokens'),
       tokensPerSecond: requireNumber(row, 'tokensPerSecond'),
     })
-    seriesByModel.set(key, series)
+    entriesByModel.set(key, entry)
   }
 
-  return [...seriesByModel.values()]
+  return [...entriesByModel.values()]
 }
 
 export async function parseTokensPerSecondFile(
   file: File,
   fallbackDevice: Device,
-): Promise<RawDataset<TokensPerSecondSeries>> {
+): Promise<RawDataset<TokenRateUploadEntry>> {
   const { text, isCsv } = await readFile(file)
 
   if (isCsv) {
-    const series = groupIntoTokensPerSecondSeries(parseCsvRows(text))
+    const series = groupIntoTokenRateEntries(parseCsvRows(text))
     return new RawDataset(fallbackDevice, series)
   }
 
-  const raw = JSON.parse(text) as { device?: Device; series?: TokensPerSecondSeries[] }
+  const raw = JSON.parse(text) as { device?: Device; series?: TokenRateUploadEntry[] }
   if (!Array.isArray(raw.series) || raw.series.length === 0) {
     throw new Error('JSON file needs a non-empty "series" array.')
   }
@@ -107,26 +113,23 @@ export async function parseTokensPerSecondFile(
 // --- Memory vs time ---
 
 function groupIntoMemoryTimeSeries(rows: Record<string, string>[]): MemoryTimeSeries[] {
-  const seriesByModel = new Map<string, MemoryTimeSeries>()
+  const seriesByModel = new Map<string, MutableMemoryTimeSeries>()
 
   for (const row of rows) {
-    const family = requireFamily(row)
+    const family = row.family
+    if (!family) throw new Error('Column "family" is required.')
     const model = row.model
     if (!model) throw new Error('Column "model" is required.')
-    if (row.phase !== 'Prefill' && row.phase !== 'Decode') {
-      throw new Error(`Column "phase" must be "Prefill" or "Decode" (got "${row.phase}").`)
-    }
 
     const series = seriesByModel.get(model) ?? { model, family, points: [] }
     series.points.push({
       timeMs: requireNumber(row, 'timeMs'),
       vramGB: requireNumber(row, 'vramGB'),
-      phase: row.phase,
     })
     seriesByModel.set(model, series)
   }
 
-  return [...seriesByModel.values()]
+  return freezeMemoryTimeSeries([...seriesByModel.values()])
 }
 
 export async function parseMemoryFile(
@@ -144,7 +147,7 @@ export async function parseMemoryFile(
   if (!Array.isArray(raw.series) || raw.series.length === 0) {
     throw new Error('JSON file needs a non-empty "series" array.')
   }
-  return new RawDataset(raw.device ?? fallbackDevice, raw.series)
+  return new RawDataset(raw.device ?? fallbackDevice, freezeMemoryTimeSeries(raw.series))
 }
 
 // --- Acceptance rate vs time ---
@@ -153,7 +156,8 @@ function groupIntoAcceptanceRateSeries(rows: Record<string, string>[]): Acceptan
   const seriesByModel = new Map<string, AcceptanceRateTimeSeries>()
 
   for (const row of rows) {
-    const family = requireFamily(row)
+    const family = row.family
+    if (!family) throw new Error('Column "family" is required.')
     const model = row.model
     if (!model) throw new Error('Column "model" is required.')
 
@@ -190,7 +194,8 @@ export async function parseAcceptanceRateFile(
 
 function toDecodingSpeedupEntries(rows: Record<string, string>[]): DecodingSpeedupEntry[] {
   return rows.map((row) => {
-    const family = requireFamily(row)
+    const family = row.family
+    if (!family) throw new Error('Column "family" is required.')
     if (!row.model) throw new Error('Column "model" is required.')
     return {
       model: row.model,
@@ -222,7 +227,8 @@ export async function parseDecodingSpeedupFile(
 
 function toBenchmarkMatrixRows(rows: Record<string, string>[]): BenchmarkMatrixRow[] {
   return rows.map((row) => {
-    const family = requireFamily(row)
+    const family = row.family
+    if (!family) throw new Error('Column "family" is required.')
     if (!row.model) throw new Error('Column "model" is required.')
     return {
       model: row.model,

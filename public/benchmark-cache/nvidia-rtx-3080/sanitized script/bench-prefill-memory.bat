@@ -49,7 +49,7 @@ for %%M in ("%MODELS:,=" "%") do (
           set "MODEL_NAME=%%~nM"
           set "RUN_NAME=!MODEL_NAME!_p%%P_b%%B_ub%%U_n0_r%REPETITIONS%"
           set "BENCH_JSON=%RESULTS_DIR%\!RUN_NAME!.json"
-          set "GPU_CSV=%RESULTS_DIR%\!RUN_NAME!.gpu.csv"
+          set "GPU_CSV=%RESULTS_DIR%\!RUN_NAME!.csv"
           set "LOGGER_TITLE=llama-bench-gpu-memory-logger-!RUN_NAME!"
 
           echo "!MODEL!",%%P,%%B,%%U,0,%REPETITIONS%,"!BENCH_JSON!","!GPU_CSV!" >> "%RUN_INDEX%"
